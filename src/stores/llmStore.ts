@@ -77,9 +77,9 @@ export const PROVIDERS: ProviderConfig[] = [
     apiKeyLabel: 'OpenAI API Key',
     requiresKey: true,
     models: [
-      { id: 'gpt-4o',           label: 'GPT-4o',           contextK: 128 },
-      { id: 'gpt-4o-mini',      label: 'GPT-4o Mini',      contextK: 128 },
-      { id: 'gpt-4-turbo',      label: 'GPT-4 Turbo',      contextK: 128 },
+      { id: 'gpt-5.2',           label: 'GPT-5.2',           contextK: 400 },
+      { id: 'gpt-5-mini',      label: 'GPT-5 Mini',      contextK: 400 },
+      { id: 'gpt-5-nano',      label: 'GPT-5 Nano',      contextK: 400 },
       { id: 'gpt-3.5-turbo',    label: 'GPT-3.5 Turbo',    contextK: 16  },
     ],
   },
