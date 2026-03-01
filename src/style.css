@@ -1,0 +1,48 @@
+@import 'tailwindcss';
+@plugin "daisyui";
+
+/*
+  Font imports — two pairings to choose from:
+
+  OPTION A (recommended): DM Serif Display + DM Sans
+    Elegant, high contrast, excellent for study/reading contexts.
+    Add to index.html <head>:
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+
+  OPTION B: Lora + Inter
+    Lora is a warm literary serif for body text, pairs beautifully
+    with a clean sans for UI labels.
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+
+  After choosing, swap the font-family in body below.
+*/
+
+@theme {
+    /* Tonal Hierarchy */
+    --color-sakura-white: #ffffff;
+    --color-sakura-mist: #fcf0f2;
+    --color-sakura-dark: #5e5256;
+
+    /* Accents & Text */
+    --color-sakura-pink: #f4cfdf;
+    --color-sakura-text: #2c2426; /* bumped from #4a4446 for better contrast */
+    --color-sakura-muted: #9e8289; /* slightly darker muted for legibility    */
+
+    --radius-box: 2px;
+}
+
+body {
+    background-color: var(--color-sakura-white);
+    color: var(--color-sakura-text);
+
+    /* OPTION A — uncomment after adding the Google Fonts link tag */
+    /* font-family: 'DM Sans', 'Helvetica Neue', Arial, sans-serif; */
+
+    /* OPTION B — uncomment after adding the Google Fonts link tag */
+    font-family: 'Lora', Georgia, serif;
+
+    /* Fallback until a font is chosen */
+    /* font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif; */
+
+    letter-spacing: 0.02em;
+}
