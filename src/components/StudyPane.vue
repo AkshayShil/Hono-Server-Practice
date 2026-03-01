@@ -83,7 +83,7 @@ async function fetchCards(): Promise<void> {
 </script>
 
 <template>
-    <section class="col-span-7 bg-sakura-white overflow-y-auto flex flex-col">
+    <section class="col-span-8 bg-sakura-white overflow-y-auto flex flex-col">
         <!-- ── Fetch-feedback banner ─────────────────────────────────────────── -->
         <Transition name="banner">
             <div v-if="fetchStatus !== 'idle'" class="shrink-0 px-16 pt-6">

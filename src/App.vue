@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
+import Queuepane from '@/components/Queuepane.vue'
 import SessionHistory from '@/components/SessionHistory.vue'
 import StudyPane from '@/components/StudyPane.vue'
 import { useCardStore } from '@/stores/cardStore'
@@ -9,7 +10,6 @@ import { useCardStore } from '@/stores/cardStore'
 const store = useCardStore()
 
 onMounted(async () => {
-    // init() restores the persisted deck from localStorage before fetching.
     await store.init()
     await store.fillQueue()
 })
@@ -21,26 +21,31 @@ onMounted(async () => {
     >
         <AppHeader />
 
+        <!-- 25 / 50 / 25 — grid-cols-12: 3 + 6 + 3 -->
         <main class="flex-1 grid grid-cols-12 w-full overflow-hidden">
+            <!-- Left: Queue (25%) -->
+            <Queuepane />
+
+            <!-- Centre: Study editor (50%) -->
             <StudyPane />
 
-            <!-- Session History panel with its own clear button -->
-            <aside class="col-span-5 bg-sakura-mist flex flex-col overflow-hidden">
-                <!-- Panel header with dustbin -->
+            <!-- Right: Session history (25%) -->
+            <aside
+                class="col-span-2 bg-sakura-mist flex flex-col overflow-hidden border-l border-sakura-pink/15"
+            >
+                <!-- Panel header -->
                 <div
-                    class="flex items-center justify-between px-8 py-5 border-b border-sakura-pink/20"
+                    class="px-6 py-5 border-b border-sakura-pink/15 flex items-center justify-between shrink-0"
                 >
-                    <p class="text-[10px] tracking-[0.4em] uppercase text-sakura-muted">
-                        Session History
+                    <p class="text-[9px] tracking-[0.5em] uppercase text-sakura-muted/70">
+                        History
                     </p>
-
                     <button
                         v-if="store.processedCards.length > 0"
                         @click="store.clearProcessedCards()"
-                        class="flex items-center gap-1.5 text-[9px] tracking-[0.3em] uppercase text-sakura-muted/60 hover:text-sakura-muted transition-colors duration-300 cursor-pointer"
+                        class="flex items-center gap-1.5 text-[8px] tracking-[0.3em] uppercase text-sakura-muted/45 hover:text-sakura-muted transition-colors duration-300 cursor-pointer"
                         title="Clear session history"
                     >
-                        <!-- Trash icon -->
                         <svg
                             class="w-3 h-3"
                             viewBox="0 0 24 24"
@@ -57,8 +62,7 @@ onMounted(async () => {
                     </button>
                 </div>
 
-                <!-- Delegate card rendering to SessionHistory, minus its own header -->
-                <SessionHistory class="flex-1 overflow-y-auto" />
+                <SessionHistory />
             </aside>
         </main>
 
@@ -67,12 +71,12 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-section::-webkit-scrollbar,
-aside::-webkit-scrollbar {
-    width: 3px;
+/* Thin scrollbars across all panels */
+:deep(*::-webkit-scrollbar) {
+    width: 2px;
 }
-section::-webkit-scrollbar-thumb,
-aside::-webkit-scrollbar-thumb {
+:deep(*::-webkit-scrollbar-thumb) {
     background-color: rgba(179, 153, 162, 0.15);
+    border-radius: 2px;
 }
 </style>
