@@ -227,8 +227,8 @@ function closeCard() {
 .mode-chip {
     padding: 3px 8px;
     border-radius: 12px;
-    font-size: 8px;
-    letter-spacing: 0.25em;
+    font-size: 11px; // Increased
+    letter-spacing: 0.1em; // Adjusted for readability
     text-transform: uppercase;
     border: 1px solid rgba(244, 207, 223, 0.35);
     background: transparent;
@@ -268,9 +268,10 @@ function closeCard() {
     align-items: center;
     gap: 4px;
     padding: 4px 12px 6px;
-    font-size: 8px;
-    letter-spacing: 0.12em;
-    color: rgba(179, 153, 162, 0.5);
+    font-size: 11px; // Increased
+    letter-spacing: 0.05em; // Adjusted
+    color: rgba(44, 36, 38, 0.75);
+    // color: #2c2426;
     flex-shrink: 0;
 }
 .mode-hint {
@@ -289,8 +290,8 @@ function closeCard() {
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 8px;
-    letter-spacing: 0.2em;
+    font-size: 10px; // Increased
+    letter-spacing: 0.1em; // Adjusted
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.55);
     background: transparent;
@@ -370,8 +371,8 @@ function closeCard() {
 }
 
 .status-dot {
-    width: 5px;
-    height: 5px;
+    width: 6px; // Increased slightly
+    height: 6px; // Increased slightly
     border-radius: 50%;
     flex-shrink: 0;
     background: rgba(179, 153, 162, 0.3);
@@ -397,18 +398,18 @@ function closeCard() {
 }
 
 .status-label {
-    font-size: 8px;
-    letter-spacing: 0.3em;
+    font-size: 10px; // Increased
+    letter-spacing: 0.1em; // Adjusted
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.5);
     flex: 1;
 }
 
 .card-type-chip {
-    font-size: 7px;
-    letter-spacing: 0.2em;
+    font-size: 9px; // Increased
+    letter-spacing: 0.1em; // Adjusted
     text-transform: uppercase;
-    padding: 1px 6px;
+    padding: 2px 6px; // Added slight padding
     border-radius: 8px;
     &.ctype--new {
         background: rgba(100, 160, 220, 0.15);
@@ -425,9 +426,9 @@ function closeCard() {
 }
 
 .score-pill {
-    font-size: 9px;
+    font-size: 11px; // Increased
     font-weight: 600;
-    padding: 1px 7px;
+    padding: 2px 8px; // Adjusted padding
     border-radius: 10px;
     &--high {
         background: rgba(80, 160, 100, 0.15);
@@ -444,12 +445,12 @@ function closeCard() {
 }
 
 .card-q {
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: 14px; // Increased for readability
+    line-height: 1.6; // Improved spacing
     color: rgba(44, 36, 38, 0.8);
     border-left: 2px solid rgba(244, 207, 223, 0.55);
     padding-left: 8px;
-    margin-bottom: 3px;
+    margin-bottom: 5px;
     :deep(b),
     :deep(strong) {
         font-weight: 600;
@@ -460,24 +461,24 @@ function closeCard() {
 }
 
 .verdict-line {
-    font-size: 10px;
+    font-size: 12px; // Increased
     color: rgba(44, 36, 38, 0.5);
     font-style: italic;
     padding-left: 10px;
-    line-height: 1.4;
+    line-height: 1.5;
 }
 
 .analyzing-row {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 10px;
+    font-size: 11px; // Increased
     color: rgba(179, 153, 162, 0.65);
     padding: 3px 0;
 }
 
 .error-msg {
-    font-size: 10px;
+    font-size: 11px; // Increased
     color: rgba(190, 80, 60, 0.75);
     padding: 3px 0;
 }
@@ -492,25 +493,25 @@ function closeCard() {
 }
 
 .suggested-chip {
-    font-size: 8px;
-    letter-spacing: 0.15em;
+    font-size: 10px; // Increased
+    letter-spacing: 0.05em; // Adjusted
     text-transform: uppercase;
-    padding: 2px 8px;
+    padding: 3px 8px; // Adjusted padding
     border-radius: 8px;
     background: rgba(244, 207, 223, 0.3);
     color: @muted;
 }
 
 .tap-hint {
-    font-size: 8px;
+    font-size: 10px; // Increased
     color: rgba(179, 153, 162, 0.4);
     letter-spacing: 0.05em;
 }
 
 .rated-tag {
     padding-top: 6px;
-    font-size: 8px;
-    letter-spacing: 0.3em;
+    font-size: 10px; // Increased
+    letter-spacing: 0.1em; // Adjusted
     text-transform: uppercase;
     color: rgba(80, 160, 100, 0.5);
 }
@@ -523,15 +524,15 @@ function closeCard() {
     justify-content: center;
     padding: 40px 16px;
     gap: 4px;
-    font-size: 10px;
-    letter-spacing: 0.3em;
+    font-size: 12px; // Increased
+    letter-spacing: 0.1em; // Adjusted
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.35);
     text-align: center;
 }
 .empty-sub {
-    font-size: 9px;
-    letter-spacing: 0.1em;
+    font-size: 11px; // Increased
+    letter-spacing: 0.05em; // Adjusted
     text-transform: none;
     color: rgba(179, 153, 162, 0.25);
 }
