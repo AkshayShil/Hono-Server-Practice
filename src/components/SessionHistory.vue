@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useCardStore, type ProcessedCard } from '@/stores/cardStore'
-import { useLLMStore, PROMPT_TEMPLATES, type PromptMode } from '@/stores/llmStore'
-// import AnalysisPanel from '@/components/AnalysisPanel.vue'
+import { useLLMStore, PROMPT_TEMPLATES, type PromptMode } from '@/stores/llm/index'
 import Carddetaildialog from './Carddetaildialog.vue'
 import LLMSettings from '@/components/LLMSettings.vue'
-// import CardDetailDialog from '@/components/CardDetailDialog.vue'
 
 const store = useCardStore()
 const llm = useLLMStore()
@@ -14,13 +12,23 @@ const processedCards = computed(() => [...store.processedCards])
 const hasRated = computed(() => store.processedCards.some((c) => c.rated))
 const hasAny = computed(() => store.processedCards.length > 0)
 
-// Dialog state
-const selectedCard = ref<ProcessedCard | null>(null)
-function openCard(card: ProcessedCard) {
-    selectedCard.value = card
+// ── Dialog state ───────────────────────────────────────────────────────────
+// We store only the cardId, then look up the live card object from the store
+// via a computed. This means the dialog always reflects the current state
+// (e.g. 'analyzing' → 'success') rather than a frozen snapshot.
+const selectedCardId = ref<number | null>(null)
+
+const selectedCard = computed<ProcessedCard | null>(() => {
+    if (selectedCardId.value === null) return null
+    return store.processedCards.find((c) => c.cardId === selectedCardId.value) ?? null
+})
+
+function openCard(card: ProcessedCard): void {
+    selectedCardId.value = card.cardId
 }
-function closeCard() {
-    selectedCard.value = null
+
+function closeCard(): void {
+    selectedCardId.value = null
 }
 </script>
 
@@ -140,7 +148,7 @@ function closeCard() {
                             card.cardType
                         }}</span>
 
-                        <!-- Score pill (if available) -->
+                        <!-- Score pill -->
                         <span
                             v-if="card.feedback"
                             class="score-pill"
@@ -200,7 +208,19 @@ function closeCard() {
         </div>
 
         <!-- ── Detail dialog ───────────────────────────────────────────── -->
-        <CardDetailDialog v-if="selectedCard" :card="selectedCard" @close="closeCard" />
+        <!--
+          The component stays mounted so Teleport + Transition work correctly.
+          The 'show' prop toggles visibility inside the component, where v-if
+          sits directly under <Transition> as Vue requires.
+          'selectedCard' is a computed that looks up the live object from the
+          store, so the dialog always shows up-to-date feedback as it arrives.
+        -->
+        <Carddetaildialog
+            v-if="selectedCard"
+            :card="selectedCard"
+            :show="selectedCardId !== null"
+            @close="closeCard"
+        />
     </div>
 </template>
 
@@ -227,8 +247,8 @@ function closeCard() {
 .mode-chip {
     padding: 3px 8px;
     border-radius: 12px;
-    font-size: 11px; // Increased
-    letter-spacing: 0.1em; // Adjusted for readability
+    font-size: 11px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     border: 1px solid rgba(244, 207, 223, 0.35);
     background: transparent;
@@ -268,10 +288,9 @@ function closeCard() {
     align-items: center;
     gap: 4px;
     padding: 4px 12px 6px;
-    font-size: 11px; // Increased
-    letter-spacing: 0.05em; // Adjusted
+    font-size: 11px;
+    letter-spacing: 0.05em;
     color: rgba(44, 36, 38, 0.75);
-    // color: #2c2426;
     flex-shrink: 0;
 }
 .mode-hint {
@@ -290,8 +309,8 @@ function closeCard() {
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 10px; // Increased
-    letter-spacing: 0.1em; // Adjusted
+    font-size: 10px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.55);
     background: transparent;
@@ -371,8 +390,8 @@ function closeCard() {
 }
 
 .status-dot {
-    width: 6px; // Increased slightly
-    height: 6px; // Increased slightly
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     flex-shrink: 0;
     background: rgba(179, 153, 162, 0.3);
@@ -398,18 +417,18 @@ function closeCard() {
 }
 
 .status-label {
-    font-size: 10px; // Increased
-    letter-spacing: 0.1em; // Adjusted
+    font-size: 10px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.5);
     flex: 1;
 }
 
 .card-type-chip {
-    font-size: 9px; // Increased
-    letter-spacing: 0.1em; // Adjusted
+    font-size: 9px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    padding: 2px 6px; // Added slight padding
+    padding: 2px 6px;
     border-radius: 8px;
     &.ctype--new {
         background: rgba(100, 160, 220, 0.15);
@@ -426,9 +445,9 @@ function closeCard() {
 }
 
 .score-pill {
-    font-size: 11px; // Increased
+    font-size: 11px;
     font-weight: 600;
-    padding: 2px 8px; // Adjusted padding
+    padding: 2px 8px;
     border-radius: 10px;
     &--high {
         background: rgba(80, 160, 100, 0.15);
@@ -445,8 +464,8 @@ function closeCard() {
 }
 
 .card-q {
-    font-size: 14px; // Increased for readability
-    line-height: 1.6; // Improved spacing
+    font-size: 14px;
+    line-height: 1.6;
     color: rgba(44, 36, 38, 0.8);
     border-left: 2px solid rgba(244, 207, 223, 0.55);
     padding-left: 8px;
@@ -461,7 +480,7 @@ function closeCard() {
 }
 
 .verdict-line {
-    font-size: 12px; // Increased
+    font-size: 12px;
     color: rgba(44, 36, 38, 0.5);
     font-style: italic;
     padding-left: 10px;
@@ -472,13 +491,13 @@ function closeCard() {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px; // Increased
+    font-size: 11px;
     color: rgba(179, 153, 162, 0.65);
     padding: 3px 0;
 }
 
 .error-msg {
-    font-size: 11px; // Increased
+    font-size: 11px;
     color: rgba(190, 80, 60, 0.75);
     padding: 3px 0;
 }
@@ -493,25 +512,25 @@ function closeCard() {
 }
 
 .suggested-chip {
-    font-size: 10px; // Increased
-    letter-spacing: 0.05em; // Adjusted
+    font-size: 10px;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
-    padding: 3px 8px; // Adjusted padding
+    padding: 3px 8px;
     border-radius: 8px;
     background: rgba(244, 207, 223, 0.3);
     color: @muted;
 }
 
 .tap-hint {
-    font-size: 10px; // Increased
+    font-size: 10px;
     color: rgba(179, 153, 162, 0.4);
     letter-spacing: 0.05em;
 }
 
 .rated-tag {
     padding-top: 6px;
-    font-size: 10px; // Increased
-    letter-spacing: 0.1em; // Adjusted
+    font-size: 10px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: rgba(80, 160, 100, 0.5);
 }
@@ -524,15 +543,15 @@ function closeCard() {
     justify-content: center;
     padding: 40px 16px;
     gap: 4px;
-    font-size: 12px; // Increased
-    letter-spacing: 0.1em; // Adjusted
+    font-size: 12px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.35);
     text-align: center;
 }
 .empty-sub {
-    font-size: 11px; // Increased
-    letter-spacing: 0.05em; // Adjusted
+    font-size: 11px;
+    letter-spacing: 0.05em;
     text-transform: none;
     color: rgba(179, 153, 162, 0.25);
 }

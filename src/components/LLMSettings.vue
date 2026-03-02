@@ -6,7 +6,7 @@ import {
     PROMPT_TEMPLATES,
     type ProviderId,
     type PromptMode,
-} from '@/stores/llmStore'
+} from '@/stores/llm/index'
 
 const llm = useLLMStore()
 const open = ref(false)

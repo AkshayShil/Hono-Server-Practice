@@ -5,6 +5,7 @@ import AnalysisPanel from '@/components/AnalysisPanel.vue'
 
 const props = defineProps<{
     card: ProcessedCard
+    show: boolean
 }>()
 
 const emit = defineEmits<{
@@ -13,7 +14,6 @@ const emit = defineEmits<{
 
 const store = useCardStore()
 
-// Rating labels and their meanings
 const RATINGS = [
     { value: 1, label: 'Again', hint: 'Blackout — completely forgot', color: 'rating--again' },
     { value: 2, label: 'Hard', hint: 'Remembered with serious struggle', color: 'rating--hard' },
@@ -41,8 +41,15 @@ function keepAndClose(): void {
 
 <template>
     <Teleport to="body">
+        <!--
+          v-if lives HERE, inside the Teleport, so Vue's Transition can
+          correctly snapshot the enter/leave states of the backdrop element.
+          Putting v-if on the component itself (outside Teleport) breaks the
+          Transition because the node is detached from the normal render tree
+          before Transition can observe it.
+        -->
         <Transition name="dialog-fade">
-            <div class="backdrop" @click.self="keepAndClose">
+            <div v-if="show" class="backdrop" @click.self="keepAndClose">
                 <div class="dialog">
                     <!-- Header -->
                     <div class="dialog-header">
@@ -82,7 +89,7 @@ function keepAndClose(): void {
                             <p class="answer-text">{{ card.userResponse || '—' }}</p>
                         </section>
 
-                        <!-- AI Feedback -->
+                        <!-- AI Feedback — shown as soon as it arrives -->
                         <section v-if="card.feedback" class="section">
                             <p class="section-label">AI Feedback</p>
                             <AnalysisPanel :feedback="card.feedback" />
@@ -107,7 +114,7 @@ function keepAndClose(): void {
                             ⚠ {{ card.llmAnalysis || 'Analysis failed' }}
                         </div>
 
-                        <!-- ── Rating section ─────────────────────────────────────── -->
+                        <!-- ── Rating section ──────────────────────────────────────── -->
                         <section v-if="!card.rated" class="section rating-section">
                             <p class="section-label">Rate your recall</p>
 
@@ -385,7 +392,6 @@ function keepAndClose(): void {
     gap: 12px;
 }
 
-// AI suggestion banner
 .suggestion-banner {
     padding: 12px 14px;
     background: rgba(244, 207, 223, 0.2);
@@ -438,7 +444,6 @@ function keepAndClose(): void {
     letter-spacing: 0.05em;
 }
 
-// Rating buttons grid
 .rating-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -467,7 +472,6 @@ function keepAndClose(): void {
         box-shadow: 0 0 0 2px currentColor;
     }
 
-    // Colour variants
     &.rating--again {
         &:hover,
         &--suggested {
@@ -535,7 +539,6 @@ function keepAndClose(): void {
     border: 1px solid rgba(244, 207, 223, 0.7);
 }
 
-// Already rated
 .rated-block {
     display: flex;
     align-items: center;

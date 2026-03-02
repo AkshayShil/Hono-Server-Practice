@@ -13,8 +13,6 @@ const currentCard = computed(() => store.currentCard)
 
 // ---------------------------------------------------------------------------
 // Editor
-// VueQuill manages its own lifecycle — no manual onMounted/ref juggling.
-// v-model:content binds the HTML string directly.
 // ---------------------------------------------------------------------------
 
 const editorContent = ref('')
@@ -33,9 +31,12 @@ function resetEditor(): void {
     editorContent.value = ''
 }
 
-async function submitResponse(): Promise<void> {
+function submitResponse(): void {
     if (!currentCard.value || editorIsEmpty.value) return
-    await store.submitReview(editorContent.value)
+    // Fire-and-forget: submitReview is now synchronous — it advances the queue
+    // immediately and runs LLM analysis in the background.
+    store.submitReview(editorContent.value)
+    // Reset editor right away so the user can start answering the next card.
     resetEditor()
 }
 
@@ -204,10 +205,7 @@ async function fetchCards(): Promise<void> {
                     </button>
                 </div>
 
-                <!-- ── Editor — always in DOM ──────────────────────────────────────
-             This section must NOT be inside a v-if. Quill mounts into
-             quillContainer on onMounted; if the div doesn't exist yet,
-             the ref will be null and Quill will never initialize.        -->
+                <!-- ── Editor ──────────────────────────────────────────────────── -->
                 <div class="border-t border-sakura-pink/30 pt-8 space-y-5 mt-auto">
                     <div class="flex items-center justify-between">
                         <p class="text-[10px] tracking-[0.4em] uppercase text-sakura-muted">
@@ -366,8 +364,6 @@ async function fetchCards(): Promise<void> {
 }
 
 // ── VueQuill / Quill (Sakura skin) ───────────────────────────────────────
-// VueQuill renders the toolbar and editor as sibling divs inside .quill-sakura.
-// We override the snow theme colours to match the sakura palette.
 :deep(.quill-sakura) {
     box-shadow: 0 0 0 1px rgba(179, 153, 162, 0.25);
     border-radius: 2px;

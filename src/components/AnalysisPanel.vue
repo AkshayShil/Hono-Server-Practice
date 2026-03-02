@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { LLMFeedback, Quiz } from '@/stores/llmStore'
+import type { LLMFeedback, Quiz } from '@/stores/llm/'
 
 const props = defineProps<{
     feedback: LLMFeedback
@@ -181,10 +181,7 @@ function isCorrect(quiz: Quiz, i: number): boolean {
                         <button
                             v-for="(opt, oi) in quiz.options"
                             :key="oi"
-                            @click="
-                                quizAnswers[qi] = opt
-                                revealQuiz(qi)
-                            "
+                            @click="((quizAnswers[qi] = opt), revealQuiz(qi))"
                             :disabled="quizRevealed[qi]"
                             class="mc-option"
                             :class="{
@@ -206,10 +203,7 @@ function isCorrect(quiz: Quiz, i: number): boolean {
                         <button
                             v-for="opt in ['True', 'False']"
                             :key="opt"
-                            @click="
-                                quizAnswers[qi] = opt
-                                revealQuiz(qi)
-                            "
+                            @click="((quizAnswers[qi] = opt), revealQuiz(qi))"
                             :disabled="quizRevealed[qi]"
                             class="tf-btn"
                             :class="{

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
-import { useLLMStore, type LLMFeedback } from './llmStore';
+import { useLLMStore, type LLMFeedback } from './llm/index';
 
 /** AnkiConnect runs locally on this port by default. */
 const ANKI_CONNECT_URL = 'http://localhost:8765';
@@ -75,10 +75,6 @@ interface AnkiDeckStats {
 // AnkiConnect transport
 // ---------------------------------------------------------------------------
 
-/**
- * Sends a single action to AnkiConnect and returns the `result` field.
- * Throws if the HTTP request fails or AnkiConnect returns a non-null error.
- */
 async function invoke<T>(action: string, params: Record<string, unknown> = {}): Promise<T> {
   const res = await fetch(ANKI_CONNECT_URL, {
     method: 'POST',
@@ -136,19 +132,12 @@ export const useCardStore = defineStore('cardStore', () => {
 
   const currentCard = computed<Card | null>(() => cardQueue.value[0] ?? null);
 
-  // Persist the active deck whenever it changes.
   watch(currentDeck, persistDeck);
 
   // -------------------------------------------------------------------------
   // Initialization
   // -------------------------------------------------------------------------
 
-  /**
-   * Loads all deck names from AnkiConnect and restores the persisted active
-   * deck (falling back to the first deck alphabetically).
-   *
-   * AnkiConnect action: deckNamesAndIds → { deckName: deckId }
-   */
   async function init(): Promise<void> {
     try {
       const deckMap = await invoke<Record<string, number>>('deckNamesAndIds');
@@ -173,14 +162,6 @@ export const useCardStore = defineStore('cardStore', () => {
   // Queue Management
   // -------------------------------------------------------------------------
 
-  /**
-   * Finds due + new card IDs via AnkiConnect's card browser query, fetches
-   * their full info, and appends unseen cards to the local queue.
-   *
-   * AnkiConnect actions:
-   *   findCards  → number[]          (card IDs matching a search query)
-   *   cardsInfo  → AnkiCardInfo[]    (full card data for given IDs)
-   */
   async function fillQueue(deckName?: string): Promise<void> {
     const targetDeck = deckName ?? currentDeck.value;
     if (isFetching.value || !targetDeck) return;
@@ -199,23 +180,10 @@ export const useCardStore = defineStore('cardStore', () => {
 
       const rawCards = await invoke<AnkiCardInfo[]>('cardsInfo', { cards: freshIds });
 
-      console.debug('[fillQueue] cardsInfo returned', rawCards.length, 'cards');
-      if (rawCards[0]) {
-        const fieldKeys = Object.keys(rawCards[0].fields);
-        const firstKey = fieldKeys[0];
-        console.debug('[fillQueue] field keys on first card:', fieldKeys);
-        if (firstKey) {
-          console.debug('[fillQueue] first field value:', rawCards[0].fields[firstKey]?.value?.slice(0, 200));
-        }
-      }
-
       const cards: Card[] = rawCards.map((raw) => {
-        // Fields are ordered — sort by .order and take front/back by position.
         const ordered = Object.values(raw.fields).sort((a, b) => a.order - b.order);
         const question = ordered[0]?.value ?? '';
         const answer   = ordered[1]?.value ?? '';
-        // AnkiConnect cardsInfo doesn't expose queue type directly.
-        // We use the queue field: 0=new, 1=learning, 2=review, 3=day-learn
         const queueNum = (raw as unknown as { queue?: number }).queue ?? 2;
         const cardType: 'new' | 'learn' | 'review' =
           queueNum === 0 ? 'new' : queueNum === 1 || queueNum === 3 ? 'learn' : 'review';
@@ -229,11 +197,10 @@ export const useCardStore = defineStore('cardStore', () => {
         };
       });
 
-      console.debug('[fillQueue] first card question:', cards[0]?.question?.slice(0, 200));
       cardQueue.value.push(...cards);
     } catch (err) {
       console.error('CardStore.fillQueue:', err);
-      throw err; // Re-throw so the UI can show an error banner.
+      throw err;
     } finally {
       isFetching.value = false;
     }
@@ -243,14 +210,6 @@ export const useCardStore = defineStore('cardStore', () => {
   // Review Actions
   // -------------------------------------------------------------------------
 
-  /**
-   * Submits an ease rating directly to AnkiConnect, removes the card from
-   * the local queue, and triggers a background refill if running low.
-   *
-   * AnkiConnect action: answerCards → boolean
-   *
-   * @param ease - 1 (Again), 2 (Hard), 3 (Good), 4 (Easy).
-   */
   async function answerCard(cardId: number, ease: number): Promise<boolean> {
     try {
       await invoke<boolean>('answerCards', {
@@ -272,23 +231,21 @@ export const useCardStore = defineStore('cardStore', () => {
   }
 
   /**
-   * Moves the current card to session history and sends the user's answer to
-   * the LLM analysis endpoint for grading.
+   * Moves the current card to session history, advances the queue immediately,
+   * then kicks off LLM analysis in the background (non-blocking).
    *
-   * The card's question and correct answer come directly from the already-
-   * fetched card data — no extra AnkiConnect call is needed.
-   *
-   * @param markdownResponse - User's answer, pre-converted to Markdown.
+   * The caller does NOT need to await this — the card entry in processedCards
+   * starts as 'analyzing' and is mutated in-place when the LLM responds,
+   * which Vue's reactivity will pick up automatically.
    */
-  async function submitReview(htmlResponse: string): Promise<void> {
+  function submitReview(htmlResponse: string): void {
     if (!currentCard.value) return;
     const llm = useLLMStore();
 
     const cardToAnalyze: Card = { ...currentCard.value };
-
-    // Strip HTML tags for plain-text LLM input
     const plainText = htmlResponse.replace(/<[^>]*>/g, '').trim();
 
+    // 1. Add to history immediately with 'analyzing' status
     const processedEntry: ProcessedCard = {
       ...cardToAnalyze,
       status: 'analyzing',
@@ -298,32 +255,36 @@ export const useCardStore = defineStore('cardStore', () => {
     };
     processedCards.value.unshift(processedEntry);
 
-    // Remove from queue
+    // 2. Advance the queue immediately — next card is now currentCard
     const queueIndex = cardQueue.value.findIndex(c => c.cardId === cardToAnalyze.cardId);
     if (queueIndex > -1) cardQueue.value.splice(queueIndex, 1);
 
-    try {
-      const feedback = await llm.analyze({
-        question:      cardToAnalyze.question.replace(/<[^>]*>/g, ''),
-        correctAnswer: cardToAnalyze.answer.replace(/<[^>]*>/g, ''),
-        userAnswer:    plainText,
-        cardType:      cardToAnalyze.cardType,
-      });
+    // 3. Fire-and-forget LLM analysis — mutates the entry in-place when done
+    void (async () => {
+      try {
+        const feedback = await llm.analyze({
+          question:      cardToAnalyze.question.replace(/<[^>]*>/g, ''),
+          correctAnswer: cardToAnalyze.answer.replace(/<[^>]*>/g, ''),
+          userAnswer:    plainText,
+          cardType:      cardToAnalyze.cardType,
+        });
 
-      const entry = processedCards.value.find(c => c.cardId === cardToAnalyze.cardId);
-      if (entry) {
-        entry.status   = 'success';
-        entry.feedback = feedback;
-        entry.llmAnalysis = feedback.verdict; // keep string fallback in sync
+        // Find by cardId — safe even if the array was reordered
+        const entry = processedCards.value.find(c => c.cardId === cardToAnalyze.cardId);
+        if (entry) {
+          entry.status      = 'success';
+          entry.feedback    = feedback;
+          entry.llmAnalysis = feedback.verdict;
+        }
+      } catch (err) {
+        console.error(`CardStore.submitReview (cardId=${cardToAnalyze.cardId}):`, err);
+        const entry = processedCards.value.find(c => c.cardId === cardToAnalyze.cardId);
+        if (entry) {
+          entry.status      = 'error';
+          entry.llmAnalysis = err instanceof Error ? err.message : 'Analysis failed';
+        }
       }
-    } catch (err) {
-      console.error(`CardStore.submitReview (cardId=${cardToAnalyze.cardId}):`, err);
-      const entry = processedCards.value.find(c => c.cardId === cardToAnalyze.cardId);
-      if (entry) {
-        entry.status = 'error';
-        entry.llmAnalysis = err instanceof Error ? err.message : 'Analysis failed';
-      }
-    }
+    })();
   }
 
   /**
@@ -337,30 +298,26 @@ export const useCardStore = defineStore('cardStore', () => {
     if (entry) entry.rated = true;
   }
 
-  /** Clears the in-session processed-cards history. */
   function clearProcessedCards(): void {
     processedCards.value = [];
   }
 
-  /** Remove a single card from processed history by cardId. */
   function removeProcessedCard(cardId: number): void {
-    processedCards.value = processedCards.value.filter(c => c.cardId !== cardId);
+    const idx = processedCards.value.findIndex(c => c.cardId === cardId);
+    if (idx > -1) processedCards.value.splice(idx, 1);
   }
 
-  /** Remove only cards that have already been rated (graded). */
   function removeRatedCards(): void {
-    processedCards.value = processedCards.value.filter(c => !c.rated);
+    // Splice in reverse so indices stay valid
+    for (let i = processedCards.value.length - 1; i >= 0; i--) {
+      if (processedCards.value[i]!.rated) processedCards.value.splice(i, 1);
+    }
   }
 
   // -------------------------------------------------------------------------
   // Deck Management
   // -------------------------------------------------------------------------
 
-  /**
-   * Returns new / learning / review counts for a single deck.
-   *
-   * AnkiConnect action: getDeckStats → { [deckId]: AnkiDeckStats }
-   */
   async function getDeckStats(deckName: string): Promise<DeckStats | null> {
     try {
       const result = await invoke<Record<string, AnkiDeckStats>>('getDeckStats', {
@@ -379,12 +336,6 @@ export const useCardStore = defineStore('cardStore', () => {
     }
   }
 
-  /**
-   * Switches the active deck locally, clears the stale card queue, and tells
-   * Anki's GUI to open the deck's review screen.
-   *
-   * AnkiConnect action: guiDeckReview
-   */
   async function selectDeck(deckName: string): Promise<boolean> {
     try {
       await invoke<null>('guiDeckReview', { name: deckName });
@@ -401,11 +352,6 @@ export const useCardStore = defineStore('cardStore', () => {
   // Card Modification
   // -------------------------------------------------------------------------
 
-  /**
-   * Suspends a card and removes it from the local queue.
-   *
-   * AnkiConnect action: suspend
-   */
   async function suspendCard(cardId: number): Promise<boolean> {
     try {
       await invoke<boolean>('suspend', { cards: [cardId] });
@@ -418,11 +364,6 @@ export const useCardStore = defineStore('cardStore', () => {
     }
   }
 
-  /**
-   * Buries a card until tomorrow and removes it from the local queue.
-   *
-   * AnkiConnect action: bury
-   */
   async function buryCard(cardId: number): Promise<boolean> {
     try {
       await invoke<boolean>('bury', { cards: [cardId] });
@@ -435,14 +376,6 @@ export const useCardStore = defineStore('cardStore', () => {
     }
   }
 
-  /**
-   * Updates one or more fields on a note.
-   *
-   * AnkiConnect action: updateNoteFields
-   *
-   * @param noteId - The note (not card) ID — available as `card.noteId`.
-   * @param fields - Map of field name → new HTML string value.
-   */
   async function editCard(noteId: number, fields: Record<string, string>): Promise<boolean> {
     try {
       await invoke<null>('updateNoteFields', {
@@ -459,11 +392,6 @@ export const useCardStore = defineStore('cardStore', () => {
   // System
   // -------------------------------------------------------------------------
 
-  /**
-   * Checks whether AnkiConnect is reachable using its lightest action.
-   *
-   * AnkiConnect action: version → number
-   */
   async function getHealth(): Promise<HealthStatus | null> {
     try {
       const version = await invoke<number>('version');
@@ -477,11 +405,6 @@ export const useCardStore = defineStore('cardStore', () => {
     }
   }
 
-  /**
-   * Triggers Anki's built-in sync with AnkiWeb.
-   *
-   * AnkiConnect action: sync
-   */
   async function syncAnki(): Promise<boolean> {
     try {
       await invoke<null>('sync');
