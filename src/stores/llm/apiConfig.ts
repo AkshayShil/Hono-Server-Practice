@@ -11,7 +11,7 @@ import type { ProviderConfig } from './types';
 
 export const INFERENCE_DEFAULTS = {
   /** Hard cap on output tokens — keeps costs predictable */
-  maxTokens: 4000,
+  maxTokens: 6000,
   /** Low temperature for structured JSON output (0 = deterministic) */
   temperature: 0.3,
   /** Nucleus sampling — pair with temperature for quality/diversity balance */

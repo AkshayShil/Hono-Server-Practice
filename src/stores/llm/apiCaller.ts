@@ -1,6 +1,13 @@
 // ---------------------------------------------------------------------------
-// apiCaller.ts — Thin fetch wrappers, one per provider family
+// apiCaller.ts — Thin fetch wrappers, one per provider family.
 // Each function returns the raw text from the model.
+//
+// TRUNCATION POLICY:
+//   finish_reason: "length" / "MAX_TOKENS" means the model answered but ran
+//   out of output tokens mid-response. We return the partial content and let
+//   responseParser.attemptRepair() close any open JSON brackets. This gives
+//   the best chance of a usable result. We only throw for truly empty
+//   responses or hard refusals (content_filter / SAFETY).
 // ---------------------------------------------------------------------------
 
 import { INFERENCE_DEFAULTS } from './apiConfig';
@@ -14,9 +21,11 @@ interface CallParams {
   userMessage: string;
 }
 
-// ── Anthropic ───────────────────────────────────────────────────────────────
+// ── Anthropic ────────────────────────────────────────────────────────────────
 
-export async function callAnthropic({ baseUrl, apiKey, model, template, userMessage }: CallParams): Promise<string> {
+export async function callAnthropic({
+  baseUrl, apiKey, model, template, userMessage,
+}: CallParams): Promise<string> {
   const res = await fetch(`${baseUrl}/messages`, {
     method: 'POST',
     headers: {
@@ -41,9 +50,9 @@ export async function callAnthropic({ baseUrl, apiKey, model, template, userMess
     stop_reason: string;
   };
 
-  // Anthropic signals truncation via stop_reason: 'max_tokens'
   if (data.stop_reason === 'max_tokens') {
-    console.warn('[apiCaller] Anthropic: response hit max_tokens limit — output may be truncated');
+    // Truncated — log and return partial content for repair
+    console.warn('[apiCaller] Anthropic: stop_reason=max_tokens — response truncated, attempting repair');
   }
 
   const text = data.content.find(b => b.type === 'text')?.text ?? '';
@@ -51,9 +60,11 @@ export async function callAnthropic({ baseUrl, apiKey, model, template, userMess
   return text;
 }
 
-// ── Google Gemini ───────────────────────────────────────────────────────────
+// ── Google Gemini ────────────────────────────────────────────────────────────
 
-export async function callGoogle({ baseUrl, apiKey, model, template, userMessage }: CallParams): Promise<string> {
+export async function callGoogle({
+  baseUrl, apiKey, model, template, userMessage,
+}: CallParams): Promise<string> {
   const url = `${baseUrl}/models/${model.id}:generateContent?key=${apiKey}`;
 
   const res = await fetch(url, {
@@ -86,7 +97,8 @@ export async function callGoogle({ baseUrl, apiKey, model, template, userMessage
     throw new Error('Google blocked this response due to safety filters. Try rephrasing your answer.');
   }
   if (finishReason === 'MAX_TOKENS') {
-    console.warn('[apiCaller] Google: response hit maxOutputTokens — output may be truncated');
+    // Truncated — log and let repair handle it
+    console.warn('[apiCaller] Google: finishReason=MAX_TOKENS — response truncated, attempting repair');
   }
 
   const text = candidate?.content.parts[0]?.text ?? '';
@@ -94,7 +106,7 @@ export async function callGoogle({ baseUrl, apiKey, model, template, userMessage
   return text;
 }
 
-// ── OpenAI-compatible (OpenAI / OpenRouter / Ollama) ───────────────────────
+// ── OpenAI-compatible (OpenAI / OpenRouter / Ollama) ────────────────────────
 
 interface OpenAICompatParams extends CallParams {
   providerId: string;
@@ -106,9 +118,7 @@ export async function callOpenAICompat({
 }: OpenAICompatParams): Promise<string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
-  if (apiKey && requiresKey) {
-    headers['Authorization'] = `Bearer ${apiKey}`;
-  }
+  if (apiKey && requiresKey) headers['Authorization'] = `Bearer ${apiKey}`;
   if (providerId === 'openrouter') {
     headers['HTTP-Referer'] = 'https://anki-sakura-reviewer';
     headers['X-Title'] = 'Anki // 桜';
@@ -116,7 +126,7 @@ export async function callOpenAICompat({
 
   const tokenParam = model.tokenParam ?? 'max_tokens';
 
-  // GPT-5 / o-series only accept their default sampling params.
+  // GPT-5 / o-series only accept their default sampling params — omit entirely.
   const samplingParams = model.fixedSampling
     ? {}
     : { temperature: INFERENCE_DEFAULTS.temperature, top_p: INFERENCE_DEFAULTS.topP };
@@ -135,7 +145,7 @@ export async function callOpenAICompat({
     }),
   });
 
-  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`OpenAI API error ${res.status}: ${await res.text()}`);
 
   const data = await res.json() as {
     choices: Array<{
@@ -148,19 +158,29 @@ export async function callOpenAICompat({
   const finishReason = choice?.finish_reason ?? 'unknown';
   const content = choice?.message?.content ?? '';
 
-  // Surface the real reason instead of a generic "empty response" message
+  // Hard refusal — no content will ever come from this request
   if (finishReason === 'content_filter') {
-    throw new Error('OpenAI refused this response due to content filtering. Try rephrasing your answer.');
+    throw new Error(
+      'OpenAI refused this response due to content filtering. Try rephrasing your answer.'
+    );
   }
+
+  // Truncation — content exists but JSON is cut off mid-stream.
+  // Return the partial content and let responseParser.attemptRepair() handle it.
+  // This is NOT an error — it means maxTokens needs to be raised if it happens often.
   if (finishReason === 'length') {
-    console.warn('[apiCaller] OpenAI: finish_reason=length — response was cut off, consider raising maxTokens');
+    console.warn(
+      `[apiCaller] OpenAI: finish_reason=length — response truncated at ${INFERENCE_DEFAULTS.maxTokens} tokens.\n` +
+      `Passing partial content to responseParser for repair. If this happens frequently, raise maxTokens in apiConfig.ts.`
+    );
+    // Fall through — content is the partial JSON, repair will handle it
   }
+
+  // Truly empty — model returned nothing at all
   if (!content) {
     throw new Error(
-      `OpenAI returned an empty response.\n` +
-      `finish_reason: "${finishReason}"\n` +
-      `model: ${model.id}\n` +
-      `This usually means the model refused the request or hit an internal limit.`
+      `OpenAI returned an empty response (finish_reason: "${finishReason}", model: ${model.id}).\n` +
+      `This usually means the model is unavailable or the request was malformed.`
     );
   }
 

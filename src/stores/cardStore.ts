@@ -313,21 +313,37 @@ export const useCardStore = defineStore('cardStore', () => {
 
       const entry = processedCards.value.find(c => c.cardId === cardToAnalyze.cardId);
       if (entry) {
-        entry.status   = 'success';
-        entry.feedback = feedback;
-        entry.llmAnalysis = feedback.verdict; // keep string fallback in sync
+        entry.status      = 'success';
+        entry.feedback    = feedback;
+        entry.llmAnalysis = feedback.verdict;
       }
+
+      // Log full review so student can download session notes
+      const errorLog = useErrorLogStore();
+      errorLog.captureSuccess({
+        cardId:          cardToAnalyze.cardId,
+        question:        cardToAnalyze.question.replace(/<[^>]*>/g, ''),
+        userAnswer:      plainText,
+        provider:        llm.provider.label,
+        model:           llm.modelId,
+        score:           feedback.score,
+        verdict:         feedback.verdict,
+        strengths:       feedback.strengths,
+        gaps:            feedback.gaps,
+        improvements:    feedback.improvements,
+        exemplar:        feedback.exemplar,
+        suggestedRating: feedback.suggestedRating,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Analysis failed';
       console.error(`CardStore.submitReview (cardId=${cardToAnalyze.cardId}):`, err);
       const entry = processedCards.value.find(c => c.cardId === cardToAnalyze.cardId);
       if (entry) {
-        entry.status = 'error';
+        entry.status      = 'error';
         entry.llmAnalysis = message;
       }
-      // Capture into error log — auto-writes to disk on Tauri/Electron builds
       const errorLog = useErrorLogStore();
-      errorLog.capture({
+      errorLog.captureError({
         cardId:       cardToAnalyze.cardId,
         question:     cardToAnalyze.question.replace(/<[^>]*>/g, ''),
         userAnswer:   plainText,
@@ -350,8 +366,8 @@ export const useCardStore = defineStore('cardStore', () => {
   }
 
   /**
-   * Resets a failed/errored card back to 'analyzing' and re-fires the LLM
-   * call. Called from CardDetailDialog's Retry button.
+   * Resets a failed card to 'analyzing' and re-fires the LLM call.
+   * Called from the Retry button in CardDetailDialog.
    */
   function retryAnalysis(cardId: number): void {
     const entry = processedCards.value.find(c => c.cardId === cardId);
@@ -371,17 +387,29 @@ export const useCardStore = defineStore('cardStore', () => {
           cardType:      entry.cardType,
         });
         const e = processedCards.value.find(c => c.cardId === cardId);
-        if (e) {
-          e.status      = 'success';
-          e.feedback    = feedback;
-          e.llmAnalysis = feedback.verdict;
-        }
+        if (e) { e.status = 'success'; e.feedback = feedback; e.llmAnalysis = feedback.verdict; }
+
+        const errorLog = useErrorLogStore();
+        errorLog.captureSuccess({
+          cardId,
+          question:        entry.question.replace(/<[^>]*>/g, ''),
+          userAnswer:      entry.userResponse,
+          provider:        llm.provider.label,
+          model:           llm.modelId,
+          score:           feedback.score,
+          verdict:         feedback.verdict,
+          strengths:       feedback.strengths,
+          gaps:            feedback.gaps,
+          improvements:    feedback.improvements,
+          exemplar:        feedback.exemplar,
+          suggestedRating: feedback.suggestedRating,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Analysis failed';
         const e = processedCards.value.find(c => c.cardId === cardId);
         if (e) { e.status = 'error'; e.llmAnalysis = message; }
         const errorLog = useErrorLogStore();
-        errorLog.capture({
+        errorLog.captureError({
           cardId,
           question:     entry.question.replace(/<[^>]*>/g, ''),
           userAnswer:   entry.userResponse,

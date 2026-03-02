@@ -86,7 +86,7 @@ function keepAndClose(): void {
                             <div class="question-text" v-html="card.question" />
                         </section>
 
-                        <!-- Deck answer — always visible as reference -->
+                        <!-- Deck answer — always shown as reference -->
                         <section class="section">
                             <p class="section-label">Deck answer</p>
                             <div class="deck-answer-text" v-html="card.answer || '—'" />
@@ -662,10 +662,8 @@ function keepAndClose(): void {
     :deep(.cloze) {
         border-bottom: 2px solid @pink;
         color: @muted;
-        font-weight: 500;
     }
 }
-
 // ── Retry button ──────────────────────────────────────────────────────────
 .error-block {
     display: flex;

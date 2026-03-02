@@ -15,17 +15,14 @@ const hasRated = computed(() => store.processedCards.some((c) => c.rated))
 const hasAny = computed(() => store.processedCards.length > 0)
 
 // ── Dialog state ──────────────────────────────────────────────────────────
-// Store only the cardId. The computed 'selectedCard' does a live lookup into
-// the store on every render, so the dialog always reflects the latest status
-// (analyzing → success) without holding a stale snapshot reference.
+// Store only the cardId. selectedCard is a live computed lookup so the
+// dialog always reflects the latest LLM state (analyzing → success).
 const selectedCardId = ref<number | null>(null)
-
 const selectedCard = computed<ProcessedCard | null>(() =>
     selectedCardId.value === null
         ? null
         : (store.processedCards.find((c) => c.cardId === selectedCardId.value) ?? null),
 )
-
 function openCard(card: ProcessedCard): void {
     selectedCardId.value = card.cardId
 }
@@ -80,41 +77,44 @@ function closeCard(): void {
             >
         </div>
 
-        <!-- ── Bulk delete controls ────────────────────────────────────── -->
-        <div v-if="hasAny" class="delete-bar">
-            <button v-if="hasRated" @click="store.removeRatedCards()" class="del-btn">
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.75"
-                    class="w-3 h-3"
-                >
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                </svg>
-                Clear graded
-            </button>
-            <button @click="store.clearProcessedCards()" class="del-btn del-btn--all">
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.75"
-                    class="w-3 h-3"
-                >
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    <path d="M10 11v6M14 11v6" />
-                </svg>
-                Clear all
-            </button>
-            <!-- Error log download — only shown when session has errors -->
+        <!-- ── Controls bar — always visible once any review exists ──────── -->
+        <div class="delete-bar">
+            <template v-if="hasAny">
+                <button v-if="hasRated" @click="store.removeRatedCards()" class="del-btn">
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.75"
+                        class="w-3 h-3"
+                    >
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    </svg>
+                    Clear graded
+                </button>
+                <button @click="store.clearProcessedCards()" class="del-btn del-btn--all">
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.75"
+                        class="w-3 h-3"
+                    >
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6M14 11v6" />
+                    </svg>
+                    Clear all
+                </button>
+            </template>
+            <!-- Download always visible once any review has been logged -->
             <button
-                v-if="errorLog.hasErrors"
+                v-if="errorLog.count > 0"
                 @click="errorLog.downloadLog()"
-                class="del-btn del-btn--log"
-                :title="`Download ${errorLog.count} error log${errorLog.count !== 1 ? 's' : ''} from this session`"
+                class="del-btn del-btn--download"
+                :class="{ 'del-btn--has-errors': errorLog.hasErrors }"
+                :title="`Download session log (${errorLog.count} reviews, ${errorLog.errorCount} errors)`"
             >
                 <svg
                     viewBox="0 0 24 24"
@@ -127,7 +127,9 @@ function closeCard(): void {
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                Errors ({{ errorLog.count }})
+                Session log{{
+                    errorLog.hasErrors ? ` ⚠ ${errorLog.errorCount}` : ` (${errorLog.count})`
+                }}
             </button>
         </div>
 
@@ -230,9 +232,8 @@ function closeCard(): void {
         </div>
 
         <!-- ── Detail dialog ───────────────────────────────────────────── -->
-        <!-- Keep component always mounted so Teleport+Transition work correctly.  -->
-        <!-- 'show' prop does the v-if *inside* the Teleport under <Transition>.   -->
-        <!-- 'selectedCard' is a live computed — always reflects current LLM state.-->
+        <!-- v-if keeps component mounted; show prop toggles v-if on backdrop  -->
+        <!-- inside Teleport so Transition fires correctly (Vue Teleport rule). -->
         <Carddetaildialog
             v-if="selectedCard !== null"
             :card="selectedCard"
@@ -606,15 +607,24 @@ function closeCard(): void {
     border-radius: 2px;
 }
 
-// ── Error log button ──────────────────────────────────────────────────────
-.del-btn--log {
+// ── Session log download button ───────────────────────────────────────────
+.del-btn--download {
     margin-left: auto;
-    color: rgba(190, 130, 60, 0.75);
-    border-color: rgba(200, 140, 60, 0.3);
+    color: rgba(80, 120, 200, 0.7);
+    border-color: rgba(80, 120, 200, 0.25);
     &:hover {
-        color: rgba(160, 100, 20, 0.9);
-        border-color: rgba(200, 140, 60, 0.55);
-        background: rgba(200, 140, 60, 0.07);
+        color: rgba(60, 100, 180, 0.9);
+        border-color: rgba(80, 120, 200, 0.5);
+        background: rgba(80, 120, 200, 0.07);
+    }
+    &.del-btn--has-errors {
+        color: rgba(190, 120, 40, 0.8);
+        border-color: rgba(200, 130, 40, 0.3);
+        &:hover {
+            color: rgba(170, 100, 20, 0.9);
+            border-color: rgba(200, 130, 40, 0.55);
+            background: rgba(200, 130, 40, 0.07);
+        }
     }
 }
 </style>
