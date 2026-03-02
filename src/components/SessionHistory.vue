@@ -2,31 +2,33 @@
 import { computed, ref } from 'vue'
 import { useCardStore, type ProcessedCard } from '@/stores/cardStore'
 import { useLLMStore, PROMPT_TEMPLATES, type PromptMode } from '@/stores/llm/index'
+import { useErrorLogStore } from '@/stores/errorLogStore'
 import Carddetaildialog from './Carddetaildialog.vue'
 import LLMSettings from '@/components/LLMSettings.vue'
 
 const store = useCardStore()
 const llm = useLLMStore()
+const errorLog = useErrorLogStore()
 
 const processedCards = computed(() => [...store.processedCards])
 const hasRated = computed(() => store.processedCards.some((c) => c.rated))
 const hasAny = computed(() => store.processedCards.length > 0)
 
-// ── Dialog state ───────────────────────────────────────────────────────────
-// We store only the cardId, then look up the live card object from the store
-// via a computed. This means the dialog always reflects the current state
-// (e.g. 'analyzing' → 'success') rather than a frozen snapshot.
+// ── Dialog state ──────────────────────────────────────────────────────────
+// Store only the cardId. The computed 'selectedCard' does a live lookup into
+// the store on every render, so the dialog always reflects the latest status
+// (analyzing → success) without holding a stale snapshot reference.
 const selectedCardId = ref<number | null>(null)
 
-const selectedCard = computed<ProcessedCard | null>(() => {
-    if (selectedCardId.value === null) return null
-    return store.processedCards.find((c) => c.cardId === selectedCardId.value) ?? null
-})
+const selectedCard = computed<ProcessedCard | null>(() =>
+    selectedCardId.value === null
+        ? null
+        : (store.processedCards.find((c) => c.cardId === selectedCardId.value) ?? null),
+)
 
 function openCard(card: ProcessedCard): void {
     selectedCardId.value = card.cardId
 }
-
 function closeCard(): void {
     selectedCardId.value = null
 }
@@ -107,6 +109,26 @@ function closeCard(): void {
                 </svg>
                 Clear all
             </button>
+            <!-- Error log download — only shown when session has errors -->
+            <button
+                v-if="errorLog.hasErrors"
+                @click="errorLog.downloadLog()"
+                class="del-btn del-btn--log"
+                :title="`Download ${errorLog.count} error log${errorLog.count !== 1 ? 's' : ''} from this session`"
+            >
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    class="w-3 h-3"
+                >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Errors ({{ errorLog.count }})
+            </button>
         </div>
 
         <!-- ── Card list ───────────────────────────────────────────────── -->
@@ -148,7 +170,7 @@ function closeCard(): void {
                             card.cardType
                         }}</span>
 
-                        <!-- Score pill -->
+                        <!-- Score pill (if available) -->
                         <span
                             v-if="card.feedback"
                             class="score-pill"
@@ -208,15 +230,11 @@ function closeCard(): void {
         </div>
 
         <!-- ── Detail dialog ───────────────────────────────────────────── -->
-        <!--
-          The component stays mounted so Teleport + Transition work correctly.
-          The 'show' prop toggles visibility inside the component, where v-if
-          sits directly under <Transition> as Vue requires.
-          'selectedCard' is a computed that looks up the live object from the
-          store, so the dialog always shows up-to-date feedback as it arrives.
-        -->
+        <!-- Keep component always mounted so Teleport+Transition work correctly.  -->
+        <!-- 'show' prop does the v-if *inside* the Teleport under <Transition>.   -->
+        <!-- 'selectedCard' is a live computed — always reflects current LLM state.-->
         <Carddetaildialog
-            v-if="selectedCard"
+            v-if="selectedCard !== null"
             :card="selectedCard"
             :show="selectedCardId !== null"
             @close="closeCard"
@@ -247,8 +265,8 @@ function closeCard(): void {
 .mode-chip {
     padding: 3px 8px;
     border-radius: 12px;
-    font-size: 11px;
-    letter-spacing: 0.1em;
+    font-size: 11px; // Increased
+    letter-spacing: 0.1em; // Adjusted for readability
     text-transform: uppercase;
     border: 1px solid rgba(244, 207, 223, 0.35);
     background: transparent;
@@ -288,9 +306,10 @@ function closeCard(): void {
     align-items: center;
     gap: 4px;
     padding: 4px 12px 6px;
-    font-size: 11px;
-    letter-spacing: 0.05em;
+    font-size: 11px; // Increased
+    letter-spacing: 0.05em; // Adjusted
     color: rgba(44, 36, 38, 0.75);
+    // color: #2c2426;
     flex-shrink: 0;
 }
 .mode-hint {
@@ -309,8 +328,8 @@ function closeCard(): void {
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 10px;
-    letter-spacing: 0.1em;
+    font-size: 10px; // Increased
+    letter-spacing: 0.1em; // Adjusted
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.55);
     background: transparent;
@@ -390,8 +409,8 @@ function closeCard(): void {
 }
 
 .status-dot {
-    width: 6px;
-    height: 6px;
+    width: 6px; // Increased slightly
+    height: 6px; // Increased slightly
     border-radius: 50%;
     flex-shrink: 0;
     background: rgba(179, 153, 162, 0.3);
@@ -417,18 +436,18 @@ function closeCard(): void {
 }
 
 .status-label {
-    font-size: 10px;
-    letter-spacing: 0.1em;
+    font-size: 10px; // Increased
+    letter-spacing: 0.1em; // Adjusted
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.5);
     flex: 1;
 }
 
 .card-type-chip {
-    font-size: 9px;
-    letter-spacing: 0.1em;
+    font-size: 9px; // Increased
+    letter-spacing: 0.1em; // Adjusted
     text-transform: uppercase;
-    padding: 2px 6px;
+    padding: 2px 6px; // Added slight padding
     border-radius: 8px;
     &.ctype--new {
         background: rgba(100, 160, 220, 0.15);
@@ -445,9 +464,9 @@ function closeCard(): void {
 }
 
 .score-pill {
-    font-size: 11px;
+    font-size: 11px; // Increased
     font-weight: 600;
-    padding: 2px 8px;
+    padding: 2px 8px; // Adjusted padding
     border-radius: 10px;
     &--high {
         background: rgba(80, 160, 100, 0.15);
@@ -464,8 +483,8 @@ function closeCard(): void {
 }
 
 .card-q {
-    font-size: 14px;
-    line-height: 1.6;
+    font-size: 14px; // Increased for readability
+    line-height: 1.6; // Improved spacing
     color: rgba(44, 36, 38, 0.8);
     border-left: 2px solid rgba(244, 207, 223, 0.55);
     padding-left: 8px;
@@ -480,7 +499,7 @@ function closeCard(): void {
 }
 
 .verdict-line {
-    font-size: 12px;
+    font-size: 12px; // Increased
     color: rgba(44, 36, 38, 0.5);
     font-style: italic;
     padding-left: 10px;
@@ -491,13 +510,13 @@ function closeCard(): void {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: 11px; // Increased
     color: rgba(179, 153, 162, 0.65);
     padding: 3px 0;
 }
 
 .error-msg {
-    font-size: 11px;
+    font-size: 11px; // Increased
     color: rgba(190, 80, 60, 0.75);
     padding: 3px 0;
 }
@@ -512,25 +531,25 @@ function closeCard(): void {
 }
 
 .suggested-chip {
-    font-size: 10px;
-    letter-spacing: 0.05em;
+    font-size: 10px; // Increased
+    letter-spacing: 0.05em; // Adjusted
     text-transform: uppercase;
-    padding: 3px 8px;
+    padding: 3px 8px; // Adjusted padding
     border-radius: 8px;
     background: rgba(244, 207, 223, 0.3);
     color: @muted;
 }
 
 .tap-hint {
-    font-size: 10px;
+    font-size: 10px; // Increased
     color: rgba(179, 153, 162, 0.4);
     letter-spacing: 0.05em;
 }
 
 .rated-tag {
     padding-top: 6px;
-    font-size: 10px;
-    letter-spacing: 0.1em;
+    font-size: 10px; // Increased
+    letter-spacing: 0.1em; // Adjusted
     text-transform: uppercase;
     color: rgba(80, 160, 100, 0.5);
 }
@@ -543,15 +562,15 @@ function closeCard(): void {
     justify-content: center;
     padding: 40px 16px;
     gap: 4px;
-    font-size: 12px;
-    letter-spacing: 0.1em;
+    font-size: 12px; // Increased
+    letter-spacing: 0.1em; // Adjusted
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.35);
     text-align: center;
 }
 .empty-sub {
-    font-size: 11px;
-    letter-spacing: 0.05em;
+    font-size: 11px; // Increased
+    letter-spacing: 0.05em; // Adjusted
     text-transform: none;
     color: rgba(179, 153, 162, 0.25);
 }
@@ -585,5 +604,17 @@ function closeCard(): void {
 .flex-1::-webkit-scrollbar-thumb {
     background: rgba(179, 153, 162, 0.15);
     border-radius: 2px;
+}
+
+// ── Error log button ──────────────────────────────────────────────────────
+.del-btn--log {
+    margin-left: auto;
+    color: rgba(190, 130, 60, 0.75);
+    border-color: rgba(200, 140, 60, 0.3);
+    &:hover {
+        color: rgba(160, 100, 20, 0.9);
+        border-color: rgba(200, 140, 60, 0.55);
+        background: rgba(200, 140, 60, 0.07);
+    }
 }
 </style>

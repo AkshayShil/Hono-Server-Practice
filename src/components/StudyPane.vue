@@ -13,6 +13,8 @@ const currentCard = computed(() => store.currentCard)
 
 // ---------------------------------------------------------------------------
 // Editor
+// VueQuill manages its own lifecycle — no manual onMounted/ref juggling.
+// v-model:content binds the HTML string directly.
 // ---------------------------------------------------------------------------
 
 const editorContent = ref('')
@@ -31,12 +33,9 @@ function resetEditor(): void {
     editorContent.value = ''
 }
 
-function submitResponse(): void {
+async function submitResponse(): Promise<void> {
     if (!currentCard.value || editorIsEmpty.value) return
-    // Fire-and-forget: submitReview is now synchronous — it advances the queue
-    // immediately and runs LLM analysis in the background.
-    store.submitReview(editorContent.value)
-    // Reset editor right away so the user can start answering the next card.
+    await store.submitReview(editorContent.value)
     resetEditor()
 }
 
@@ -91,7 +90,7 @@ async function fetchCards(): Promise<void> {
                 <div class="max-w-2xl mx-auto">
                     <div
                         v-if="fetchStatus === 'fetching'"
-                        class="flex items-center gap-3 px-5 py-3 border border-sakura-pink/40 bg-sakura-mist text-[10px] tracking-[0.3em] uppercase text-sakura-muted"
+                        class="flex items-center gap-3 px-5 py-3 border border-sakura-pink/40 bg-sakura-mist text-[13px] tracking-[0.1em] uppercase text-sakura-muted"
                     >
                         <svg
                             class="w-3 h-3 animate-spin shrink-0"
@@ -107,7 +106,7 @@ async function fetchCards(): Promise<void> {
 
                     <div
                         v-else-if="fetchStatus === 'success'"
-                        class="flex items-center gap-3 px-5 py-3 border border-sakura-pink/40 bg-sakura-mist text-[10px] tracking-[0.3em] uppercase text-sakura-text"
+                        class="flex items-center gap-3 px-5 py-3 border border-sakura-pink/40 bg-sakura-mist text-[13px] tracking-[0.1em] uppercase text-sakura-text"
                     >
                         <svg
                             class="w-3 h-3 shrink-0"
@@ -132,7 +131,7 @@ async function fetchCards(): Promise<void> {
 
                     <div
                         v-else-if="fetchStatus === 'no-deck'"
-                        class="flex items-center gap-3 px-5 py-3 border border-sakura-muted/30 bg-sakura-mist text-[10px] tracking-[0.3em] uppercase text-sakura-muted"
+                        class="flex items-center gap-3 px-5 py-3 border border-sakura-muted/30 bg-sakura-mist text-[13px] tracking-[0.1em] uppercase text-sakura-muted"
                     >
                         <svg
                             class="w-3 h-3 shrink-0"
@@ -150,7 +149,7 @@ async function fetchCards(): Promise<void> {
 
                     <div
                         v-else-if="fetchStatus === 'error'"
-                        class="flex items-center gap-3 px-5 py-3 border border-sakura-muted/30 bg-sakura-mist text-[10px] tracking-[0.3em] uppercase text-sakura-muted"
+                        class="flex items-center gap-3 px-5 py-3 border border-sakura-muted/30 bg-sakura-mist text-[13px] tracking-[0.1em] uppercase text-sakura-muted"
                     >
                         <svg
                             class="w-3 h-3 shrink-0"
@@ -174,13 +173,15 @@ async function fetchCards(): Promise<void> {
             <div class="max-w-2xl mx-auto w-full flex flex-col gap-6">
                 <!-- Question — only visible when a card is loaded -->
                 <div v-if="currentCard" class="animate-fade-in space-y-4">
-                    <p class="text-[10px] tracking-[0.4em] uppercase text-sakura-muted">Question</p>
+                    <p class="text-[13px] tracking-[0.15em] uppercase text-sakura-muted">
+                        Question
+                    </p>
                     <div class="card-question" v-html="currentCard.question" />
                 </div>
 
                 <!-- Empty state -->
                 <div v-else class="flex-1 flex flex-col items-center justify-center gap-6">
-                    <p class="text-[10px] uppercase tracking-[0.5em] text-sakura-muted">
+                    <p class="text-[13px] uppercase tracking-[0.2em] text-sakura-muted">
                         No cards in queue
                     </p>
                     <button
@@ -205,13 +206,16 @@ async function fetchCards(): Promise<void> {
                     </button>
                 </div>
 
-                <!-- ── Editor ──────────────────────────────────────────────────── -->
+                <!-- ── Editor — always in DOM ──────────────────────────────────────
+             This section must NOT be inside a v-if. Quill mounts into
+             quillContainer on onMounted; if the div doesn't exist yet,
+             the ref will be null and Quill will never initialize.        -->
                 <div class="border-t border-sakura-pink/30 pt-8 space-y-5 mt-auto">
                     <div class="flex items-center justify-between">
-                        <p class="text-[10px] tracking-[0.4em] uppercase text-sakura-muted">
+                        <p class="text-[13px] tracking-[0.15em] uppercase text-sakura-muted">
                             Your Reflection
                         </p>
-                        <span class="text-[9px] uppercase tracking-widest text-sakura-muted/60"
+                        <span class="text-[12px] uppercase tracking-wider text-sakura-muted/60"
                             >⌘↵ to Analyze</span
                         >
                     </div>
@@ -252,7 +256,7 @@ async function fetchCards(): Promise<void> {
                         <button
                             @click="submitResponse"
                             :disabled="editorIsEmpty || !currentCard"
-                            class="px-10 py-3 text-[10px] tracking-[0.3em] uppercase border border-sakura-muted text-sakura-muted hover:bg-sakura-pink hover:border-sakura-pink hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer"
+                            class="px-10 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted text-sakura-muted hover:bg-sakura-pink hover:border-sakura-pink hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer"
                         >
                             Analyze
                         </button>
@@ -290,7 +294,7 @@ async function fetchCards(): Promise<void> {
 
 // ── Question text ────────────────────────────────────────────────────────
 :deep(.card-question) {
-    font-size: 1.3rem;
+    font-size: 1.5rem;
     font-weight: 400;
     line-height: 1.85;
     color: @color-text-dark;
@@ -330,8 +334,8 @@ async function fetchCards(): Promise<void> {
 
 // ── Fetch button ─────────────────────────────────────────────────────────
 .fetch-btn {
-    font-size: 10px;
-    letter-spacing: 0.3em;
+    font-size: 13px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: #9e8289;
     border: 1px solid @color-border-soft;
@@ -364,6 +368,8 @@ async function fetchCards(): Promise<void> {
 }
 
 // ── VueQuill / Quill (Sakura skin) ───────────────────────────────────────
+// VueQuill renders the toolbar and editor as sibling divs inside .quill-sakura.
+// We override the snow theme colours to match the sakura palette.
 :deep(.quill-sakura) {
     box-shadow: 0 0 0 1px rgba(179, 153, 162, 0.25);
     border-radius: 2px;
@@ -388,19 +394,21 @@ async function fetchCards(): Promise<void> {
 
     .ql-container {
         border: none;
-        font-size: 15px;
+        font-size: 16px;
         color: @color-text-dark;
     }
 
     .ql-editor {
-        min-height: 160px;
-        padding: 16px 20px;
+        min-height: 180px;
+        padding: 18px 22px;
         line-height: 1.75;
+        font-size: 1.2em;
+        font-family: 'Google Sans';
 
         &.ql-blank::before {
             color: rgba(179, 153, 162, 0.6);
             font-style: normal;
-            font-size: 14px;
+            font-size: 15px;
         }
     }
 }

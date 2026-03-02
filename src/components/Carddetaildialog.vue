@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useCardStore, type ProcessedCard } from '@/stores/cardStore'
 import AnalysisPanel from '@/components/AnalysisPanel.vue'
 
@@ -14,6 +14,16 @@ const emit = defineEmits<{
 
 const store = useCardStore()
 
+// Retry
+const isRetrying = ref(false)
+async function retryAnalysis(): Promise<void> {
+    if (isRetrying.value) return
+    isRetrying.value = true
+    await store.retryAnalysis(props.card.cardId)
+    isRetrying.value = false
+}
+
+// Rating labels and their meanings
 const RATINGS = [
     { value: 1, label: 'Again', hint: 'Blackout — completely forgot', color: 'rating--again' },
     { value: 2, label: 'Hard', hint: 'Remembered with serious struggle', color: 'rating--hard' },
@@ -41,13 +51,6 @@ function keepAndClose(): void {
 
 <template>
     <Teleport to="body">
-        <!--
-          v-if lives HERE, inside the Teleport, so Vue's Transition can
-          correctly snapshot the enter/leave states of the backdrop element.
-          Putting v-if on the component itself (outside Teleport) breaks the
-          Transition because the node is detached from the normal render tree
-          before Transition can observe it.
-        -->
         <Transition name="dialog-fade">
             <div v-if="show" class="backdrop" @click.self="keepAndClose">
                 <div class="dialog">
@@ -83,13 +86,19 @@ function keepAndClose(): void {
                             <div class="question-text" v-html="card.question" />
                         </section>
 
+                        <!-- Deck answer — always visible as reference -->
+                        <section class="section">
+                            <p class="section-label">Deck answer</p>
+                            <div class="deck-answer-text" v-html="card.answer || '—'" />
+                        </section>
+
                         <!-- Your answer -->
                         <section class="section">
                             <p class="section-label">Your answer</p>
                             <p class="answer-text">{{ card.userResponse || '—' }}</p>
                         </section>
 
-                        <!-- AI Feedback — shown as soon as it arrives -->
+                        <!-- AI Feedback -->
                         <section v-if="card.feedback" class="section">
                             <p class="section-label">AI Feedback</p>
                             <AnalysisPanel :feedback="card.feedback" />
@@ -109,12 +118,30 @@ function keepAndClose(): void {
                             <span>Waiting for AI analysis…</span>
                         </div>
 
-                        <!-- Error state -->
+                        <!-- Error state with retry -->
                         <div v-else-if="card.status === 'error'" class="error-block">
-                            ⚠ {{ card.llmAnalysis || 'Analysis failed' }}
+                            <p class="error-message">
+                                ⚠ {{ card.llmAnalysis || 'Analysis failed' }}
+                            </p>
+                            <button @click="retryAnalysis" :disabled="isRetrying" class="retry-btn">
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    class="w-3.5 h-3.5"
+                                    :class="{ 'animate-spin': isRetrying }"
+                                >
+                                    <path d="M1 4v6h6M23 20v-6h-6" />
+                                    <path
+                                        d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"
+                                    />
+                                </svg>
+                                {{ isRetrying ? 'Retrying…' : 'Retry Analysis' }}
+                            </button>
                         </div>
 
-                        <!-- ── Rating section ──────────────────────────────────────── -->
+                        <!-- ── Rating section ─────────────────────────────────────── -->
                         <section v-if="!card.rated" class="section rating-section">
                             <p class="section-label">Rate your recall</p>
 
@@ -392,6 +419,7 @@ function keepAndClose(): void {
     gap: 12px;
 }
 
+// AI suggestion banner
 .suggestion-banner {
     padding: 12px 14px;
     background: rgba(244, 207, 223, 0.2);
@@ -444,6 +472,7 @@ function keepAndClose(): void {
     letter-spacing: 0.05em;
 }
 
+// Rating buttons grid
 .rating-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -472,6 +501,7 @@ function keepAndClose(): void {
         box-shadow: 0 0 0 2px currentColor;
     }
 
+    // Colour variants
     &.rating--again {
         &:hover,
         &--suggested {
@@ -539,6 +569,7 @@ function keepAndClose(): void {
     border: 1px solid rgba(244, 207, 223, 0.7);
 }
 
+// Already rated
 .rated-block {
     display: flex;
     align-items: center;
@@ -613,5 +644,59 @@ function keepAndClose(): void {
 .dialog-fade-leave-to {
     opacity: 0;
     transform: scale(0.98) translateY(4px);
+}
+
+// ── Deck answer ───────────────────────────────────────────────────────────
+.deck-answer-text {
+    font-size: 15px;
+    line-height: 1.75;
+    color: rgba(44, 36, 38, 0.82);
+    padding: 12px 16px;
+    background: rgba(244, 207, 223, 0.15);
+    border-radius: 8px;
+    border-left: 3px solid rgba(244, 207, 223, 0.7);
+    :deep(b),
+    :deep(strong) {
+        font-weight: 600;
+    }
+    :deep(.cloze) {
+        border-bottom: 2px solid @pink;
+        color: @muted;
+        font-weight: 500;
+    }
+}
+
+// ── Retry button ──────────────────────────────────────────────────────────
+.error-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.error-message {
+    font-size: 13px;
+    line-height: 1.5;
+}
+.retry-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    align-self: flex-start;
+    padding: 7px 16px;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    border-radius: 8px;
+    border: 1px solid rgba(200, 80, 60, 0.35);
+    background: rgba(200, 80, 60, 0.08);
+    color: rgba(180, 60, 40, 0.9);
+    cursor: pointer;
+    transition: all 0.2s;
+    &:hover:not(:disabled) {
+        background: rgba(200, 80, 60, 0.15);
+        border-color: rgba(200, 80, 60, 0.55);
+    }
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 }
 </style>

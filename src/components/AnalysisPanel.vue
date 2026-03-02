@@ -249,9 +249,9 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 .analysis-panel {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 12px 14px;
-    margin-top: 8px;
+    gap: 16px;
+    padding: 16px 18px;
+    margin-top: 10px;
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.3);
     border: 1px solid rgba(244, 207, 223, 0.25);
@@ -269,7 +269,7 @@ function isCorrect(quiz: Quiz, i: number): boolean {
     align-items: baseline;
     gap: 1px;
     flex-shrink: 0;
-    padding: 6px 10px;
+    padding: 10px 16px;
     border-radius: 8px;
     border: 1px solid;
 
@@ -291,12 +291,12 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 }
 
 .score-num {
-    font-size: 20px;
+    font-size: 28px;
     font-weight: 600;
     line-height: 1;
 }
 .score-denom {
-    font-size: 9px;
+    font-size: 13px;
     opacity: 0.6;
 }
 
@@ -306,7 +306,7 @@ function isCorrect(quiz: Quiz, i: number): boolean {
     gap: 4px;
 }
 .verdict {
-    font-size: 12px;
+    font-size: 15px;
     font-weight: 500;
     color: @text;
     line-height: 1.3;
@@ -314,8 +314,8 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 
 .mode-chip {
     display: inline-block;
-    font-size: 8px;
-    letter-spacing: 0.25em;
+    font-size: 11px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     padding: 2px 7px;
     border-radius: 10px;
@@ -337,7 +337,7 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 
 // ── Score bar ─────────────────────────────────────────────────────────────
 .bar-track {
-    height: 3px;
+    height: 5px;
     background: rgba(244, 207, 223, 0.3);
     border-radius: 2px;
     overflow: hidden;
@@ -369,9 +369,9 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 .detail-label {
     display: flex;
     align-items: center;
-    gap: 5px;
-    font-size: 8px;
-    letter-spacing: 0.3em;
+    gap: 6px;
+    font-size: 12px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.65);
 
@@ -394,9 +394,9 @@ function isCorrect(quiz: Quiz, i: number): boolean {
     list-style: disc;
 
     li {
-        font-size: 11px;
-        color: rgba(44, 36, 38, 0.78);
-        line-height: 1.55;
+        font-size: 15px;
+        color: rgba(44, 36, 38, 0.82);
+        line-height: 1.65;
         list-style-position: outside;
         padding-left: 4px;
     }
@@ -414,8 +414,8 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 }
 
 .exemplar-text {
-    font-size: 11px;
-    line-height: 1.65;
+    font-size: 15px;
+    line-height: 1.7;
     color: rgba(44, 36, 38, 0.75);
     font-style: italic;
     padding: 8px 10px;
@@ -442,21 +442,21 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 }
 
 .quiz-type-chip {
-    font-size: 7px;
-    letter-spacing: 0.3em;
+    font-size: 11px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.55);
 }
 
 .quiz-prompt {
-    font-size: 11px;
+    font-size: 15px;
     font-weight: 500;
     color: @text;
     line-height: 1.45;
 }
 
 .quiz-sentence {
-    font-size: 11px;
+    font-size: 14px;
     color: rgba(44, 36, 38, 0.75);
     font-style: italic;
     line-height: 1.5;
@@ -477,11 +477,11 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 
 .quiz-input {
     flex: 1;
-    padding: 5px 10px;
+    padding: 8px 12px;
     border-radius: 6px;
     border: 1px solid rgba(244, 207, 223, 0.4);
     background: rgba(255, 255, 255, 0.6);
-    font-size: 11px;
+    font-size: 14px;
     color: @text;
     outline: none;
     transition: border-color 0.2s;
@@ -499,9 +499,9 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 }
 
 .quiz-reveal-btn {
-    padding: 5px 10px;
+    padding: 8px 14px;
     border-radius: 6px;
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: 0.2em;
     text-transform: uppercase;
     border: 1px solid rgba(244, 207, 223, 0.5);
@@ -515,7 +515,7 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 }
 
 .quiz-answer-reveal {
-    font-size: 10px;
+    font-size: 13px;
     color: rgba(44, 36, 38, 0.55);
     strong {
         color: @text;
@@ -532,9 +532,9 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 
 .mc-option {
     text-align: left;
-    padding: 6px 10px;
+    padding: 10px 14px;
     border-radius: 6px;
-    font-size: 11px;
+    font-size: 14px;
     border: 1px solid rgba(244, 207, 223, 0.3);
     background: rgba(255, 255, 255, 0.4);
     color: rgba(44, 36, 38, 0.75);
@@ -564,9 +564,9 @@ function isCorrect(quiz: Quiz, i: number): boolean {
 
 .tf-btn {
     flex: 1;
-    padding: 6px;
+    padding: 10px;
     border-radius: 6px;
-    font-size: 10px;
+    font-size: 13px;
     letter-spacing: 0.1em;
     border: 1px solid rgba(244, 207, 223, 0.35);
     background: rgba(255, 255, 255, 0.4);
@@ -599,13 +599,13 @@ function isCorrect(quiz: Quiz, i: number): boolean {
     gap: 3px;
 }
 .mnemonic-label {
-    font-size: 7px;
-    letter-spacing: 0.3em;
+    font-size: 11px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.55);
 }
 .mnemonic-text {
-    font-size: 11px;
+    font-size: 14px;
     color: @text;
     line-height: 1.5;
     font-style: italic;
