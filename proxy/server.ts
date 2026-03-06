@@ -1,30 +1,41 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { ankiProxy } from './routes/ankiProxy';
 
-// Required for ESM __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const distPath = path.resolve(__dirname, '../dist');
+const indexPath = path.resolve(distPath, 'index.html');
 
 const app = express();
 
+// Enable CORS
 app.use(cors());
 
-// Anki Proxy - handles /anki requests
+// Debugging: Log every request to see what's happening
+app.use((req, res, next) => {
+  console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+// 1. Anki Proxy
 app.use('/anki', ankiProxy);
 
-// Serve static files from the built Vue app
-const distPath = path.join(__dirname, '../dist');
+// 2. Serve Static Files (this handles / and assets automatically)
 app.use(express.static(distPath));
 
-// Catch-all route to serve index.html for SPA (Vue Router support)
-app.get('*', (req, res) => {
-  // If request is not for /anki (which is already handled), serve the app
-  if (!req.path.startsWith('/anki')) {
-    res.sendFile(path.join(distPath, 'index.html'));
+// 3. SPA Fallback: If no file was found and it's a GET request for HTML
+// We use a middleware function instead of app.get('*') to bypass Express 5's strict routing
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.url.startsWith('/anki')) {
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
   }
+  next();
 });
 
 export default app;
