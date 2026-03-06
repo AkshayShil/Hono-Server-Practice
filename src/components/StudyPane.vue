@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import { useCardStore } from '@/stores/cardStore'
+import { useLLMStore } from '@/stores/llm/llmStore'
 
 // ---------------------------------------------------------------------------
 // Store
@@ -31,6 +32,8 @@ const toolbarOptions = [
 
 function resetEditor(): void {
     editorContent.value = ''
+    showUndo.value = false
+    if (cleanupTimer) clearTimeout(cleanupTimer)
 }
 
 async function submitResponse(): Promise<void> {
@@ -42,6 +45,43 @@ async function submitResponse(): Promise<void> {
 watch(currentCard, (card) => {
     if (card) resetEditor()
 })
+
+// ---------------------------------------------------------------------------
+// Voice Cleaning
+// ---------------------------------------------------------------------------
+
+const isCleaning = ref(false)
+const originalText = ref('')
+const showUndo = ref(false)
+let cleanupTimer: ReturnType<typeof setTimeout> | null = null
+
+async function cleanEditorText() {
+    if (editorIsEmpty.value) return
+    isCleaning.value = true
+    originalText.value = editorContent.value
+
+    if (cleanupTimer) clearTimeout(cleanupTimer)
+
+    try {
+        const llm = useLLMStore()
+        const cleaned = await llm.cleanText(editorContent.value.replace(/<[^>]*>/g, '').trim())
+        editorContent.value = `<p>${cleaned}</p>`
+        showUndo.value = true
+        cleanupTimer = setTimeout(() => {
+            showUndo.value = false
+        }, 8000)
+    } catch (err) {
+        console.error('Failed to clean text:', err)
+    } finally {
+        isCleaning.value = false
+    }
+}
+
+function undoClean() {
+    editorContent.value = originalText.value
+    showUndo.value = false
+    if (cleanupTimer) clearTimeout(cleanupTimer)
+}
 
 // ---------------------------------------------------------------------------
 // Queue fetch with feedback
@@ -253,13 +293,31 @@ async function fetchCards(): Promise<void> {
                             Fetch Cards
                         </button>
 
-                        <button
-                            @click="submitResponse"
-                            :disabled="editorIsEmpty || !currentCard"
-                            class="px-10 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted text-sakura-muted hover:bg-sakura-pink hover:border-sakura-pink hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer"
-                        >
-                            Analyze
-                        </button>
+                        <div class="flex items-center gap-4">
+                            <button
+                                v-if="showUndo"
+                                @click="undoClean"
+                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-pink bg-sakura-pink/10 text-sakura-text hover:bg-sakura-pink transition-all duration-500 cursor-pointer"
+                            >
+                                Undo Clean
+                            </button>
+                            <button
+                                v-else
+                                @click="cleanEditorText"
+                                :disabled="editorIsEmpty || !currentCard || isCleaning"
+                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted/50 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer"
+                            >
+                                {{ isCleaning ? 'Cleaning…' : 'Clean Voice Text' }}
+                            </button>
+
+                            <button
+                                @click="submitResponse"
+                                :disabled="editorIsEmpty || !currentCard"
+                                class="px-10 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted text-sakura-muted hover:bg-sakura-pink hover:border-sakura-pink hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer"
+                            >
+                                Analyze
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
