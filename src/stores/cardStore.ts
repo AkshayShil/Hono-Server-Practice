@@ -3,14 +3,9 @@ import { ref, computed, watch } from 'vue';
 import { useLLMStore, type LLMFeedback } from './llm/index';
 import { useErrorLogStore } from './errorLogStore';
 
-/** AnkiConnect runs locally on this port by default. */
-const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const PROXY_PORT = 3000;
-const ANKI_CONNECT_URL = isLocal 
-  ? `http://localhost:${PROXY_PORT}/anki` 
-  : `http://${window.location.hostname}:${PROXY_PORT}/anki`;
+/** AnkiConnect proxy endpoint handled by the Express middleman. */
+const ANKI_CONNECT_URL = '/anki';
 const ANKI_CONNECT_VERSION = 6;
-
 /** Minimum queue size before a refill is triggered. */
 const QUEUE_REFILL_THRESHOLD = 5;
 
