@@ -22,7 +22,7 @@ const selectedDeck = computed({
 </script>
 
 <template>
-    <header class="h-16 bg-sakura-dark flex items-center justify-between px-12 shadow-sm z-10">
+    <header class="h-16 bg-sakura-dark flex items-center justify-between px-6 md:px-12 shadow-sm z-10">
         <div class="flex items-center gap-6">
             <h1 class="text-sm font-light tracking-[0.3em] uppercase text-sakura-white/90">
                 Anki // 桜
@@ -30,7 +30,7 @@ const selectedDeck = computed({
 
             <select
                 v-model="selectedDeck"
-                class="bg-white/10 text-[10px] border border-white/20 px-3 py-1 text-sakura-white/80 rounded-none focus:outline-none cursor-pointer uppercase tracking-widest hover:bg-white/20 transition-colors"
+                class="hidden md:inline-block bg-white/10 text-[10px] border border-white/20 px-3 py-1 text-sakura-white/80 rounded-none focus:outline-none cursor-pointer uppercase tracking-widest hover:bg-white/20 transition-colors"
             >
                 <option
                     v-for="deck in store.decks"
@@ -41,6 +41,13 @@ const selectedDeck = computed({
                     {{ deck }}
                 </option>
             </select>
+
+            <button
+                class="md:hidden bg-white/10 text-[10px] border border-white/20 px-3 py-1 text-sakura-white/80 rounded-none focus:outline-none cursor-pointer uppercase tracking-widest hover:bg-white/20 transition-colors"
+                @click="openDeckModal"
+            >
+                {{ store.currentDeck || 'Select Deck' }}
+            </button>
         </div>
 
         <div class="text-[10px] tracking-[0.2em] text-sakura-white/40 uppercase">
