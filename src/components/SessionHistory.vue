@@ -404,7 +404,14 @@ function closeCard(): void {
     }
 
     &--analyzing {
-        opacity: 0.65;
+        opacity: 0.85;
+        border-color: rgba(244, 207, 223, 0.5);
+        background: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.45) 0%,
+            rgba(244, 207, 223, 0.15) 100%
+        );
+        animation: card-pulse 2s ease-in-out infinite;
     }
     &--rated {
         border-color: rgba(244, 207, 223, 0.5);
@@ -447,6 +454,16 @@ function closeCard(): void {
     }
     50% {
         opacity: 0.3;
+    }
+}
+@keyframes card-pulse {
+    0%, 100% {
+        box-shadow: 0 2px 8px rgba(94, 82, 86, 0.05);
+        border-color: rgba(244, 207, 223, 0.32);
+    }
+    50% {
+        box-shadow: 0 4px 12px rgba(244, 207, 223, 0.3);
+        border-color: rgba(244, 207, 223, 0.6);
     }
 }
 

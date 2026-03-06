@@ -157,6 +157,20 @@ export const useCardStore = defineStore('cardStore', () => {
 
   const currentCard = computed<Card | null>(() => cardQueue.value[0] ?? null);
 
+  /** Plays a short notification sound when an analysis completes. */
+  const playAlert = () => {
+    try {
+      const audio = new Audio('/audio/complete.mp3');
+      audio.play().catch((err) => {
+        // Browsers often block autoplay until a user interacts with the page.
+        // This is expected and should fail silently.
+        console.debug('[Audio] Playback blocked or failed:', err);
+      });
+    } catch (err) {
+      console.warn('[Audio] Failed to initialize audio:', err);
+    }
+  };
+
   // Persist the active deck whenever it changes.
   watch(currentDeck, persistDeck);
 
@@ -341,6 +355,7 @@ export const useCardStore = defineStore('cardStore', () => {
         entry.status      = 'success';
         entry.feedback    = feedback;
         entry.llmAnalysis = feedback.verdict;
+        playAlert();
       }
 
       // Log full review so student can download session notes
@@ -412,7 +427,12 @@ export const useCardStore = defineStore('cardStore', () => {
           cardType:      entry.cardType,
         });
         const e = processedCards.value.find(c => c.cardId === cardId);
-        if (e) { e.status = 'success'; e.feedback = feedback; e.llmAnalysis = feedback.verdict; }
+        if (e) {
+          e.status = 'success';
+          e.feedback = feedback;
+          e.llmAnalysis = feedback.verdict;
+          playAlert();
+        }
 
         const errorLog = useErrorLogStore();
         errorLog.captureSuccess({
