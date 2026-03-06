@@ -39,7 +39,7 @@ const handleMobileDeckSelect = async (deckName: string) => {
 <template>
     <header class="h-16 bg-sakura-dark flex items-center justify-between px-6 md:px-12 shadow-sm z-10">
         <div class="flex items-center gap-6">
-            <h1 class="text-sm font-light tracking-[0.3em] uppercase text-sakura-white/90">
+            <h1 class="hidden sm:block text-sm font-light tracking-[0.3em] uppercase text-sakura-white/90">
                 Anki // 桜
             </h1>
 
@@ -66,7 +66,7 @@ const handleMobileDeckSelect = async (deckName: string) => {
         </div>
 
         <div class="text-[10px] tracking-[0.2em] text-sakura-white/40 uppercase">
-            {{ bufferedCount }} Cards Buffered
+            {{ bufferedCount }} Cards <span class="hidden sm:inline">Buffered</span>
         </div>
     </header>
 
