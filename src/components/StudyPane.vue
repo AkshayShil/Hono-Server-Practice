@@ -83,10 +83,10 @@ async function fetchCards(): Promise<void> {
 </script>
 
 <template>
-    <section class="col-span-8 bg-sakura-white overflow-y-auto flex flex-col">
+    <section class="bg-sakura-white overflow-y-auto flex flex-col">
         <!-- ── Fetch-feedback banner ─────────────────────────────────────────── -->
         <Transition name="banner">
-            <div v-if="fetchStatus !== 'idle'" class="shrink-0 px-16 pt-6">
+            <div v-if="fetchStatus !== 'idle'" class="shrink-0 px-6 md:px-16 pt-6">
                 <div class="max-w-2xl mx-auto">
                     <div
                         v-if="fetchStatus === 'fetching'"
@@ -169,7 +169,7 @@ async function fetchCards(): Promise<void> {
         </Transition>
 
         <!-- ── Main layout ───────────────────────────────────────────────────── -->
-        <div class="flex-1 px-16 py-6 flex flex-col">
+        <div class="flex-1 px-6 md:px-16 py-6 flex flex-col">
             <div class="max-w-2xl mx-auto w-full flex flex-col gap-6">
                 <!-- Question — only visible when a card is loaded -->
                 <div v-if="currentCard" class="animate-fade-in space-y-4">

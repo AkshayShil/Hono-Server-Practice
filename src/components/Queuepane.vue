@@ -9,7 +9,7 @@ const upcomingCards = computed(() => store.cardQueue.slice(1))
 </script>
 
 <template>
-    <aside class="queue-pane col-span-2 flex flex-col overflow-hidden min-h-0">
+    <aside class="queue-pane flex flex-col overflow-hidden min-h-0">
         <!-- Header -->
         <div
             class="px-6 py-5 border-b border-sakura-pink/15 flex items-center justify-between shrink-0"
