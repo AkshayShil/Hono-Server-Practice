@@ -33,26 +33,45 @@ function closeCard(): void {
     <div class="flex-1 flex flex-col overflow-hidden min-h-0">
         <!-- ── Toolbar ─────────────────────────────────────────────────── -->
         <div class="toolbar">
-            <div class="mode-switcher">
-                <button
-                    @click="llm.setPromptMode('auto')"
-                    class="mode-chip"
-                    :class="{ 'mode-chip--active': llm.promptMode === 'auto' }"
+            <div class="flex items-center gap-2">
+                <!-- Mobile-only Close Button: Toggles the checkbox defined in App.vue -->
+                <label
+                    for="history-drawer"
+                    class="md:hidden p-1 -ml-1 text-sakura-muted hover:text-sakura-text cursor-pointer transition-colors"
+                    aria-label="Close history drawer"
                 >
-                    Auto
-                </button>
-                <button
-                    v-for="t in PROMPT_TEMPLATES"
-                    :key="t.id"
-                    @click="llm.setPromptMode(t.id as PromptMode)"
-                    class="mode-chip"
-                    :class="[
-                        `mode-chip--${t.id}`,
-                        { 'mode-chip--active': llm.promptMode === t.id },
-                    ]"
-                >
-                    {{ t.label }}
-                </button>
+                    <svg
+                        class="w-5 h-5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <path d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </label>
+
+                <div class="mode-switcher">
+                    <button
+                        @click="llm.setPromptMode('auto')"
+                        class="mode-chip"
+                        :class="{ 'mode-chip--active': llm.promptMode === 'auto' }"
+                    >
+                        Auto
+                    </button>
+                    <button
+                        v-for="t in PROMPT_TEMPLATES"
+                        :key="t.id"
+                        @click="llm.setPromptMode(t.id as PromptMode)"
+                        class="mode-chip"
+                        :class="[
+                            `mode-chip--${t.id}`,
+                            { 'mode-chip--active': llm.promptMode === t.id },
+                        ]"
+                    >
+                        {{ t.label }}
+                    </button>
+                </div>
             </div>
             <LLMSettings />
         </div>
