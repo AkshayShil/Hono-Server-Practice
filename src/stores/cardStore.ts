@@ -284,6 +284,26 @@ export const useCardStore = defineStore('cardStore', () => {
   // -------------------------------------------------------------------------
 
   /**
+   * Sends successful analysis results to the server's logging endpoint.
+   */
+  async function syncAnalysisToServer(params: any, feedback: any) {
+    try {
+      await fetch('/log-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...params,
+          ...feedback,
+          feedback,
+          clientTimestamp: new Date().toISOString()
+        }),
+      });
+    } catch (err) {
+      console.warn('[Sync] Failed to send analysis to server:', err);
+    }
+  }
+
+  /**
    * Submits an ease rating directly to AnkiConnect, removes the card from
    * the local queue, and triggers a background refill if running low.
    *
@@ -374,6 +394,14 @@ export const useCardStore = defineStore('cardStore', () => {
         exemplar:        feedback.exemplar,
         suggestedRating: feedback.suggestedRating,
       });
+
+      // Sync successful analysis to server for logging
+      void syncAnalysisToServer({
+        cardId:     cardToAnalyze.cardId,
+        question:   cardToAnalyze.question.replace(/<[^>]*>/g, ''),
+        cardAnswer: cardToAnalyze.answer.replace(/<[^>]*>/g, ''),
+        userAnswer: plainText,
+      }, feedback);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Analysis failed';
       console.error(`CardStore.submitReview (cardId=${cardToAnalyze.cardId}):`, err);
@@ -449,6 +477,14 @@ export const useCardStore = defineStore('cardStore', () => {
           exemplar:        feedback.exemplar,
           suggestedRating: feedback.suggestedRating,
         });
+
+        // Sync successful analysis to server for logging
+        void syncAnalysisToServer({
+          cardId,
+          question:   entry.question.replace(/<[^>]*>/g, ''),
+          cardAnswer: entry.answer.replace(/<[^>]*>/g, ''),
+          userAnswer: entry.userResponse,
+        }, feedback);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Analysis failed';
         const e = processedCards.value.find(c => c.cardId === cardId);
