@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
 import Queuepane from '@/components/Queuepane.vue'
@@ -8,6 +8,43 @@ import StudyPane from '@/components/StudyPane.vue'
 import { useCardStore } from '@/stores/cardStore'
 
 const store = useCardStore()
+
+const touchStartX = ref(0)
+const touchStartY = ref(0)
+const minSwipeDistance = 50
+
+function handleTouchStart(e: TouchEvent) {
+    const touch = e.changedTouches[0]
+    if (!touch) return
+    touchStartX.value = touch.screenX
+    touchStartY.value = touch.screenY
+}
+
+function handleTouchEnd(e: TouchEvent) {
+    const touch = e.changedTouches[0]
+    if (!touch) return
+    const touchEndX = touch.screenX
+    const touchEndY = touch.screenY
+
+    const dx = touchStartX.value - touchEndX
+    const dy = touchStartY.value - touchEndY
+
+    // Only trigger if horizontal swipe is dominant and exceeds threshold
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > minSwipeDistance) {
+        if (window.innerWidth < 768) {
+            const drawerToggle = document.getElementById('history-drawer') as HTMLInputElement
+            if (drawerToggle) {
+                if (dx > 0 && !drawerToggle.checked) {
+                    // Swipe left (right-to-left) -> Open
+                    drawerToggle.checked = true
+                } else if (dx < 0 && drawerToggle.checked) {
+                    // Swipe right (left-to-right) -> Close
+                    drawerToggle.checked = false
+                }
+            }
+        }
+    }
+}
 
 onMounted(async () => {
     await store.init()
@@ -21,7 +58,11 @@ onMounted(async () => {
     >
         <input id="history-drawer" type="checkbox" class="drawer-toggle" />
 
-        <div class="drawer-content flex flex-col h-full overflow-hidden">
+        <div
+            class="drawer-content flex flex-col h-full overflow-hidden"
+            @touchstart="handleTouchStart"
+            @touchend="handleTouchEnd"
+        >
             <AppHeader />
 
             <!-- Mobile Drawer Toggle: Visible only on small screens -->
@@ -89,7 +130,11 @@ onMounted(async () => {
         </div>
 
         <!-- Mobile Drawer Side: Contains history for smaller screens -->
-        <div class="drawer-side z-50">
+        <div
+            class="drawer-side z-50"
+            @touchstart="handleTouchStart"
+            @touchend="handleTouchEnd"
+        >
             <label for="history-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
             <aside class="w-80 min-h-full bg-sakura-mist flex flex-col border-l border-sakura-pink/15">
                 <!-- Mobile Panel header -->
