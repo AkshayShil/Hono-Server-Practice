@@ -19,6 +19,21 @@ const selectedDeck = computed({
         if (ok) await store.fillQueue(deckName)
     },
 })
+
+const openDeckModal = () => {
+    const modal = document.getElementById('deck_modal') as HTMLDialogElement
+    if (modal) modal.showModal()
+}
+
+const handleMobileDeckSelect = async (deckName: string) => {
+    if (!deckName || deckName === store.currentDeck) return
+    const ok = await store.selectDeck(deckName)
+    if (ok) {
+        await store.fillQueue(deckName)
+        const modal = document.getElementById('deck_modal') as HTMLDialogElement
+        if (modal) modal.close()
+    }
+}
 </script>
 
 <template>
@@ -54,4 +69,44 @@ const selectedDeck = computed({
             {{ bufferedCount }} Cards Buffered
         </div>
     </header>
+
+    <dialog id="deck_modal" class="modal">
+        <div class="modal-box bg-sakura-white p-0 rounded-none border-t-4 border-sakura-dark">
+            <div class="p-4 border-b border-sakura-pink/20 bg-sakura-white/50">
+                <h3 class="font-bold text-xs uppercase tracking-[0.2em] text-sakura-text/80">
+                    Select Deck
+                </h3>
+            </div>
+            <div class="max-h-[60vh] overflow-y-auto">
+                <div
+                    v-for="deck in store.decks"
+                    :key="deck"
+                    class="p-4 cursor-pointer hover:bg-sakura-pink/10 transition-colors flex items-center justify-between group"
+                    @click="handleMobileDeckSelect(deck)"
+                >
+                    <span
+                        class="text-xs uppercase tracking-widest text-sakura-text/70 group-hover:text-sakura-text font-medium"
+                    >
+                        {{ deck }}
+                    </span>
+                    <div
+                        v-if="deck === store.currentDeck"
+                        class="w-1.5 h-1.5 rounded-full bg-sakura-dark"
+                    ></div>
+                </div>
+            </div>
+            <div class="modal-action p-4 border-t border-sakura-pink/10 m-0">
+                <form method="dialog" class="w-full">
+                    <button
+                        class="w-full text-[10px] uppercase tracking-[0.3em] font-light py-2 border border-sakura-text/20 hover:bg-sakura-text hover:text-white transition-all"
+                    >
+                        Close
+                    </button>
+                </form>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
 </template>
