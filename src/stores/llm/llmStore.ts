@@ -84,6 +84,25 @@ export const useLLMStore = defineStore('llm', () => {
   }
 
   // ── Main analyze call ──────────────────────────────────────────────────
+  async function cleanText(text: string): Promise<string> {
+    const tmpl = PROMPT_TEMPLATES.find(t => t.id === 'clean')!;
+    const p = provider.value;
+    const m = model.value;
+    const baseUrl = customBaseUrl.value.trim() || p.baseUrl;
+
+    const userMsg = `Clean this voice transcript:\n\n${text}`;
+
+    let raw: string;
+    if (p.id === 'anthropic') {
+      raw = await callAnthropic({ baseUrl, apiKey: apiKey.value, model: m, template: tmpl, userMessage: userMsg });
+    } else if (p.id === 'google') {
+      raw = await callGoogle({ baseUrl, apiKey: apiKey.value, model: m, template: tmpl, userMessage: userMsg });
+    } else {
+      raw = await callOpenAICompat({ baseUrl, apiKey: apiKey.value, model: m, template: tmpl, userMessage: userMsg, providerId: p.id, requiresKey: p.requiresKey });
+    }
+    return raw.trim();
+  }
+
   async function analyze(params: AnalyzeParams): Promise<LLMFeedback> {
     const tmpl    = resolveTemplate(params.cardType);
     const userMsg = buildUserMessage(params);
@@ -109,7 +128,7 @@ export const useLLMStore = defineStore('llm', () => {
     providerId, modelId, apiKey, promptMode, customBaseUrl,
     provider, models, model, template,
     setProvider, setModel, setApiKey, setPromptMode, setCustomBaseUrl,
-    resolveTemplate, analyze,
+    resolveTemplate, analyze, cleanText,
     PROVIDERS, PROMPT_TEMPLATES,
   };
 });

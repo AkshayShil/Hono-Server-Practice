@@ -99,4 +99,9 @@ Evaluation philosophy (RIGOROUS mode):
 
 ${JSON_SCHEMA}`,
   },
+  {
+    id: 'clean',
+    name: 'Text Cleaner',
+    systemPrompt: 'You are a text formatter. The user will provide a messy voice transcript. Fix punctuation, grammar, and formatting while preserving the original meaning and terminology. Return ONLY the cleaned text.',
+  },
 ];

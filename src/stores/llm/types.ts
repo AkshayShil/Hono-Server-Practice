@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 export type ProviderId = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'ollama';
-export type PromptMode = 'lenient' | 'balanced' | 'rigorous';
+export type PromptMode = 'lenient' | 'balanced' | 'rigorous' | 'clean';
 
 // ── Provider / Model ────────────────────────────────────────────────────────
 
@@ -36,9 +36,10 @@ export interface ProviderConfig {
 
 export interface PromptTemplate {
   id: PromptMode;
-  label: string;
-  description: string;
-  autoTrigger: string;
+  label?: string;
+  name?: string;
+  description?: string;
+  autoTrigger?: string;
   systemPrompt: string;
 }
 
