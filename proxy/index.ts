@@ -5,6 +5,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import path from 'path';
 import fs from 'fs';
+import { appendFile, mkdir } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { getLocalIp } from './utils/network';
 
@@ -12,6 +13,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.resolve(__dirname, '../dist');
 const indexPath = path.resolve(distPath, 'index.html');
+
+const logsDir = path.resolve(__dirname, '../analysis_logs');
+const sessionLogFile = path.join(logsDir, `analysis-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`);
+
+async function initLogs() {
+  try {
+    await mkdir(logsDir, { recursive: true });
+    console.log(`[Server] Analysis logs will be saved to: ${sessionLogFile}`);
+  } catch (err) {
+    console.error('[Server] Failed to create logs directory:', err);
+  }
+}
+initLogs();
 
 const app = new Hono();
 
@@ -55,6 +69,22 @@ app.all('/anki/*', async (c) => {
     });
   } catch (error) {
     return c.json({ error: 'Anki-Connect unreachable' }, 503);
+  }
+});
+
+// LLM Analysis Logging
+app.post('/log-analysis', async (c) => {
+  try {
+    const data = await c.req.json();
+    const entry = JSON.stringify({
+      ...data,
+      serverTimestamp: new Date().toISOString(),
+    }) + '\n';
+    await appendFile(sessionLogFile, entry);
+    return c.json({ status: 'ok' });
+  } catch (error) {
+    console.error('[Server] Failed to log analysis:', error);
+    return c.json({ error: 'Failed to log data' }, 500);
   }
 });
 
