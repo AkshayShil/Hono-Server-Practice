@@ -11,6 +11,8 @@ const QUEUE_REFILL_THRESHOLD = 5;
 
 /** localStorage key used to persist the active deck across page refreshes. */
 const STORAGE_KEY_CURRENT_DECK = 'ankiStudy:currentDeck';
+/** localStorage key used to persist the card queue and processed history. */
+const STORAGE_KEY_STATE = 'ankiStudy:sessionState';
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -123,6 +125,23 @@ function persistDeck(deckName: string): void {
   }
 }
 
+function saveSession(queue: Card[], history: ProcessedCard[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify({ queue, history }));
+  } catch (err) {
+    console.warn('Failed to save session:', err);
+  }
+}
+
+function loadSession(): { queue: Card[], history: ProcessedCard[] } | null {
+  try {
+    const data = localStorage.getItem(STORAGE_KEY_STATE);
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -130,14 +149,21 @@ function persistDeck(deckName: string): void {
 export const useCardStore = defineStore('cardStore', () => {
   const decks = ref<string[]>([]);
   const currentDeck = ref<string>(readPersistedDeck());
-  const cardQueue = ref<Card[]>([]);
-  const processedCards = ref<ProcessedCard[]>([]);
+  
+  const saved = loadSession();
+  const cardQueue = ref<Card[]>(saved?.queue ?? []);
+  const processedCards = ref<ProcessedCard[]>(saved?.history ?? []);
   const isFetching = ref(false);
 
   const currentCard = computed<Card | null>(() => cardQueue.value[0] ?? null);
 
   // Persist the active deck whenever it changes.
   watch(currentDeck, persistDeck);
+
+  // Persist session queue and history.
+  watch([cardQueue, processedCards], () => {
+    saveSession(cardQueue.value, processedCards.value);
+  }, { deep: true });
 
   // -------------------------------------------------------------------------
   // Initialization
