@@ -17,12 +17,12 @@ onMounted(async () => {
 
 <template>
     <div
-        class="min-h-screen flex flex-col font-sans selection:bg-sakura-pink selection:text-sakura-text"
+        class="h-screen flex flex-col overflow-hidden font-sans selection:bg-sakura-pink selection:text-sakura-text"
     >
         <AppHeader />
 
         <!-- 25 / 50 / 25 — grid-cols-12: 3 + 6 + 3 -->
-        <main class="flex-1 grid grid-cols-12 w-full overflow-hidden">
+        <main class="flex-1 grid grid-cols-12 w-full overflow-hidden min-h-0">
             <!-- Left: Queue (25%) -->
             <Queuepane />
 
@@ -31,7 +31,7 @@ onMounted(async () => {
 
             <!-- Right: Session history (25%) -->
             <aside
-                class="col-span-2 bg-sakura-mist flex flex-col overflow-hidden border-l border-sakura-pink/15"
+                class="col-span-2 bg-sakura-mist flex flex-col overflow-hidden min-h-0 border-l border-sakura-pink/15"
             >
                 <!-- Panel header -->
                 <div

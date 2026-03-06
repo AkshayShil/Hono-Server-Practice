@@ -1,12 +1,11 @@
 // ---------------------------------------------------------------------------
 // errorLogStore.ts — Session log for all LLM reviews + errors.
 //
-// Captures every completed review (success or failure) so the student can
-// download a full session report showing what was asked, what they wrote,
-// the AI score/feedback, and any errors that occurred.
+// Saves as JSON so the data is structured and can be imported into Excel,
+// processed by scripts, or used to generate Word/PDF study reports later.
 //
 // Download modes:
-//   Browser  → Blob download via <a> click
+//   Browser  → .json file download via <a> click
 //   Desktop  → Auto-writes to disk on every update when Tauri or Electron
 //              is detected (window.__TAURI__ / window.electronAPI)
 // ---------------------------------------------------------------------------
@@ -34,8 +33,22 @@ export interface ReviewLogEntry {
   improvements?: string[];
   exemplar?: string;
   suggestedRating?: number;
+  suggestedRatingReason?: string;
   // Populated on error
   errorMessage?: string;
+}
+
+export interface SessionLog {
+  meta: {
+    sessionStart: string;
+    exportedAt: string;
+    totalReviews: number;
+    successCount: number;
+    errorCount: number;
+    averageScore: number | null;
+    appVersion: string;
+  };
+  reviews: ReviewLogEntry[];
 }
 
 // ---------------------------------------------------------------------------
@@ -64,7 +77,7 @@ function detectDesktopMode(): DesktopMode {
 }
 
 // ---------------------------------------------------------------------------
-// Formatting
+// Helpers
 // ---------------------------------------------------------------------------
 
 const SESSION_START = new Date();
@@ -72,87 +85,29 @@ const SESSION_START = new Date();
 function makeFilename(): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   const d = SESSION_START;
-  return `anki-sakura-session-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}.txt`;
+  return `anki-sakura-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
 }
 
-const RATINGS = ['', 'Again', 'Hard', 'Good', 'Easy'];
-const LINE = '─'.repeat(66);
-
-function formatLog(entries: ReviewLogEntry[]): string {
-  const successCount = entries.filter(e => e.type === 'success').length;
-  const errorCount   = entries.filter(e => e.type === 'error').length;
-  const avgScore = successCount > 0
-    ? Math.round(entries.filter(e => e.type === 'success' && e.score != null)
-        .reduce((sum, e) => sum + (e.score ?? 0), 0) / successCount)
+function buildSessionLog(entries: ReviewLogEntry[]): SessionLog {
+  const successes = entries.filter(e => e.type === 'success');
+  const errors    = entries.filter(e => e.type === 'error');
+  const scores    = successes.map(e => e.score ?? 0).filter(s => s > 0);
+  const avgScore  = scores.length > 0
+    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
     : null;
 
-  const header = [
-    '╔════════════════════════════════════════════════════════════════════╗',
-    '║              Anki // 桜  —  Session Review Log                     ║',
-    '╚════════════════════════════════════════════════════════════════════╝',
-    '',
-    `Session started : ${SESSION_START.toLocaleString()}`,
-    `Report generated: ${new Date().toLocaleString()}`,
-    `Reviews logged  : ${entries.length}  (${successCount} analysed, ${errorCount} failed)`,
-    avgScore != null ? `Average score   : ${avgScore}/100` : '',
-    '',
-    '═'.repeat(66),
-    '',
-  ].filter(l => l !== null).join('\n');
-
-  if (entries.length === 0) {
-    return header + 'No reviews recorded this session yet.\n';
-  }
-
-  const body = entries.map((e, i) => {
-    const lines: string[] = [];
-    lines.push(`[${String(i + 1).padStart(2, '0')}]  ${e.timestamp}  ·  ${e.type === 'error' ? '⚠ ERROR' : '✓ ANALYSED'}`);
-    lines.push(`Provider : ${e.provider} — ${e.model}`);
-    lines.push(`Card ID  : ${e.cardId}`);
-    lines.push('');
-    lines.push('QUESTION');
-    lines.push(e.question || '(no question)');
-    lines.push('');
-    lines.push('YOUR ANSWER');
-    lines.push(e.userAnswer || '(no answer)');
-
-    if (e.type === 'success') {
-      lines.push('');
-      lines.push(`SCORE    : ${e.score ?? '?'}/100   AI rating: ${RATINGS[e.suggestedRating ?? 3] ?? '?'}`);
-      lines.push(`VERDICT  : ${e.verdict ?? ''}`);
-
-      if (e.strengths?.length) {
-        lines.push('');
-        lines.push('WHAT YOU GOT RIGHT');
-        e.strengths.forEach((s, n) => lines.push(`  ${n + 1}. ${s}`));
-      }
-      if (e.gaps?.length) {
-        lines.push('');
-        lines.push('GAPS TO FILL');
-        e.gaps.forEach((g, n) => lines.push(`  ${n + 1}. ${g}`));
-      }
-      if (e.improvements?.length) {
-        lines.push('');
-        lines.push('HOW TO IMPROVE');
-        e.improvements.forEach((im, n) => lines.push(`  ${n + 1}. ${im}`));
-      }
-      if (e.exemplar) {
-        lines.push('');
-        lines.push('MODEL ANSWER');
-        lines.push(e.exemplar);
-      }
-    } else {
-      lines.push('');
-      lines.push('ERROR');
-      lines.push(e.errorMessage ?? 'Unknown error');
-    }
-
-    lines.push('');
-    lines.push(LINE);
-    return lines.join('\n');
-  }).join('\n');
-
-  return header + body + '\n';
+  return {
+    meta: {
+      sessionStart:  SESSION_START.toISOString(),
+      exportedAt:    new Date().toISOString(),
+      totalReviews:  entries.length,
+      successCount:  successes.length,
+      errorCount:    errors.length,
+      averageScore:  avgScore,
+      appVersion:    'anki-sakura-1.0',
+    },
+    reviews: entries,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -160,25 +115,31 @@ function formatLog(entries: ReviewLogEntry[]): string {
 // ---------------------------------------------------------------------------
 
 export const useErrorLogStore = defineStore('errorLog', () => {
-  const entries   = ref<ReviewLogEntry[]>([]);
-  const hasErrors = computed(() => entries.value.some(e => e.type === 'error'));
-  const count     = computed(() => entries.value.length);
+  const entries    = ref<ReviewLogEntry[]>([]);
+  const hasErrors  = computed(() => entries.value.some(e => e.type === 'error'));
+  const count      = computed(() => entries.value.length);
   const errorCount = computed(() => entries.value.filter(e => e.type === 'error').length);
 
   /** Capture a successful review with full AI feedback */
   function captureSuccess(entry: Omit<ReviewLogEntry, 'timestamp' | 'type'>): void {
-    entries.value.push({ ...entry, type: 'success', timestamp: new Date().toLocaleString() });
+    entries.value.push({ ...entry, type: 'success', timestamp: new Date().toISOString() });
     void autoWriteIfDesktop();
   }
 
   /** Capture an LLM failure */
-  function captureError(entry: Omit<ReviewLogEntry, 'timestamp' | 'type' | 'score' | 'verdict' | 'strengths' | 'gaps' | 'improvements' | 'exemplar' | 'suggestedRating'>): void {
-    entries.value.push({ ...entry, type: 'error', timestamp: new Date().toLocaleString() });
+  function captureError(entry: Omit<ReviewLogEntry,
+    'timestamp' | 'type' | 'score' | 'verdict' | 'strengths' |
+    'gaps' | 'improvements' | 'exemplar' | 'suggestedRating' | 'suggestedRatingReason'>
+  ): void {
+    entries.value.push({ ...entry, type: 'error', timestamp: new Date().toISOString() });
     void autoWriteIfDesktop();
   }
 
-  // Keep old capture() for backwards compat with any callers
-  function capture(entry: { cardId: number; question: string; userAnswer: string; errorMessage: string; provider: string; model: string }): void {
+  // Backwards-compat alias for any old callers
+  function capture(entry: {
+    cardId: number; question: string; userAnswer: string;
+    errorMessage: string; provider: string; model: string;
+  }): void {
     captureError(entry);
   }
 
@@ -189,12 +150,13 @@ export const useErrorLogStore = defineStore('errorLog', () => {
   // ── Browser download ──────────────────────────────────────────────────────
 
   function downloadLog(): void {
-    const content = formatLog(entries.value);
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = makeFilename();
+    const log     = buildSessionLog(entries.value);
+    const json    = JSON.stringify(log, null, 2);
+    const blob    = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url     = URL.createObjectURL(blob);
+    const a       = document.createElement('a');
+    a.href        = url;
+    a.download    = makeFilename();
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -202,17 +164,25 @@ export const useErrorLogStore = defineStore('errorLog', () => {
   }
 
   // ── Desktop auto-write ────────────────────────────────────────────────────
+  // Rewrites the file on every new entry so it's always up to date mid-session.
 
   async function autoWriteIfDesktop(): Promise<void> {
-    const mode     = detectDesktopMode();
-    const content  = formatLog(entries.value);
+    const mode    = detectDesktopMode();
+    const json    = JSON.stringify(buildSessionLog(entries.value), null, 2);
     const filename = makeFilename();
     try {
       if (mode === 'tauri') {
-        await window.__TAURI__!.fs!.writeTextFile(filename, content);
+        // Requires fs plugin in tauri.conf.json:
+        // "plugins": { "fs": { "scope": ["$APPDATA/**"] } }
+        await window.__TAURI__!.fs!.writeTextFile(filename, json);
       } else if (mode === 'electron') {
+        // Expose in preload.js:
+        // contextBridge.exposeInMainWorld('electronAPI', {
+        //   writeFile: (p, d) => ipcRenderer.invoke('write-file', p, d),
+        //   getAppDir: ()    => ipcRenderer.invoke('get-app-dir'),
+        // })
         const dir = await window.electronAPI!.getAppDir();
-        await window.electronAPI!.writeFile(`${dir}/${filename}`, content);
+        await window.electronAPI!.writeFile(`${dir}/${filename}`, json);
       }
     } catch (err) {
       console.warn('[errorLogStore] Auto-write failed:', err);

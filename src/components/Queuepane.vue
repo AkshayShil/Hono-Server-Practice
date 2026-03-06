@@ -9,12 +9,12 @@ const upcomingCards = computed(() => store.cardQueue.slice(1))
 </script>
 
 <template>
-    <aside class="queue-pane col-span-2 flex flex-col overflow-hidden">
+    <aside class="queue-pane col-span-2 flex flex-col overflow-hidden min-h-0">
         <!-- Header -->
         <div
             class="px-6 py-5 border-b border-sakura-pink/15 flex items-center justify-between shrink-0"
         >
-            <p class="text-[13px] tracking-[0.2em] uppercase text-sakura-muted/80">Queue</p>
+            <p class="text-[9px] tracking-[0.5em] uppercase text-sakura-muted/70">Queue</p>
             <span class="count-badge">{{ store.cardQueue.length }}</span>
         </div>
 
@@ -45,7 +45,7 @@ const upcomingCards = computed(() => store.cardQueue.slice(1))
                 class="flex flex-col items-center justify-center py-16 gap-2"
             >
                 <div class="empty-icon">∅</div>
-                <p class="text-[12px] uppercase tracking-[0.2em] text-sakura-muted/50">
+                <p class="text-[9px] uppercase tracking-[0.4em] text-sakura-muted/35">
                     No cards queued
                 </p>
             </div>
@@ -89,11 +89,11 @@ const upcomingCards = computed(() => store.cardQueue.slice(1))
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 7px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
     border-radius: 20px;
-    font-size: 13px;
+    font-size: 9px;
     font-weight: 500;
     letter-spacing: 0.02em;
     background: rgba(244, 207, 223, 0.45);
@@ -104,7 +104,7 @@ const upcomingCards = computed(() => store.cardQueue.slice(1))
 // ── Glass card — Apple liquid glass ───────────────────────────────────────
 .glass-card {
     position: relative;
-    padding: 14px 16px 16px;
+    padding: 11px 13px 13px;
     border-radius: 12px;
     overflow: hidden;
 
@@ -174,16 +174,16 @@ const upcomingCards = computed(() => store.cardQueue.slice(1))
 // ── Card internals ────────────────────────────────────────────────────────
 .card-label {
     display: block;
-    font-size: 12px;
-    letter-spacing: 0.15em;
+    font-size: 8px;
+    letter-spacing: 0.38em;
     text-transform: uppercase;
     color: rgba(179, 153, 162, 0.5);
     margin-bottom: 5px;
 }
 
 .card-text {
-    font-size: 14px;
-    line-height: 1.6;
+    font-size: 11px;
+    line-height: 1.55;
     color: rgba(44, 36, 38, 0.75);
 
     // Strip any bold/large Anki styling — this is just a preview
@@ -205,7 +205,7 @@ const upcomingCards = computed(() => store.cardQueue.slice(1))
 
 // ── Empty state ───────────────────────────────────────────────────────────
 .empty-icon {
-    font-size: 28px;
+    font-size: 20px;
     color: rgba(179, 153, 162, 0.25);
     line-height: 1;
 }

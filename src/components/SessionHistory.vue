@@ -14,9 +14,7 @@ const processedCards = computed(() => [...store.processedCards])
 const hasRated = computed(() => store.processedCards.some((c) => c.rated))
 const hasAny = computed(() => store.processedCards.length > 0)
 
-// ── Dialog state ──────────────────────────────────────────────────────────
-// Store only the cardId. selectedCard is a live computed lookup so the
-// dialog always reflects the latest LLM state (analyzing → success).
+// Live lookup — never holds a stale snapshot reference
 const selectedCardId = ref<number | null>(null)
 const selectedCard = computed<ProcessedCard | null>(() =>
     selectedCardId.value === null
@@ -32,7 +30,7 @@ function closeCard(): void {
 </script>
 
 <template>
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <div class="flex-1 flex flex-col overflow-hidden min-h-0">
         <!-- ── Toolbar ─────────────────────────────────────────────────── -->
         <div class="toolbar">
             <div class="mode-switcher">
@@ -77,7 +75,7 @@ function closeCard(): void {
             >
         </div>
 
-        <!-- ── Controls bar — always visible once any review exists ──────── -->
+        <!-- ── Controls bar ───────────────────────────────────────────── -->
         <div class="delete-bar">
             <template v-if="hasAny">
                 <button v-if="hasRated" @click="store.removeRatedCards()" class="del-btn">
@@ -108,13 +106,12 @@ function closeCard(): void {
                     Clear all
                 </button>
             </template>
-            <!-- Download always visible once any review has been logged -->
             <button
                 v-if="errorLog.count > 0"
                 @click="errorLog.downloadLog()"
                 class="del-btn del-btn--download"
                 :class="{ 'del-btn--has-errors': errorLog.hasErrors }"
-                :title="`Download session log (${errorLog.count} reviews, ${errorLog.errorCount} errors)`"
+                :title="`${errorLog.count} reviews · ${errorLog.errorCount} errors — click to download JSON`"
             >
                 <svg
                     viewBox="0 0 24 24"
@@ -127,8 +124,8 @@ function closeCard(): void {
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                Session log{{
-                    errorLog.hasErrors ? ` ⚠ ${errorLog.errorCount}` : ` (${errorLog.count})`
+                {{
+                    errorLog.hasErrors ? `Log ⚠ ${errorLog.errorCount}` : `Log (${errorLog.count})`
                 }}
             </button>
         </div>
@@ -232,8 +229,6 @@ function closeCard(): void {
         </div>
 
         <!-- ── Detail dialog ───────────────────────────────────────────── -->
-        <!-- v-if keeps component mounted; show prop toggles v-if on backdrop  -->
-        <!-- inside Teleport so Transition fires correctly (Vue Teleport rule). -->
         <Carddetaildialog
             v-if="selectedCard !== null"
             :card="selectedCard"
@@ -607,21 +602,21 @@ function closeCard(): void {
     border-radius: 2px;
 }
 
-// ── Session log download button ───────────────────────────────────────────
+// ── Download button ───────────────────────────────────────────────────────
 .del-btn--download {
     margin-left: auto;
-    color: rgba(80, 120, 200, 0.7);
+    color: rgba(80, 120, 200, 0.75);
     border-color: rgba(80, 120, 200, 0.25);
     &:hover {
-        color: rgba(60, 100, 180, 0.9);
+        color: rgba(60, 100, 180, 0.95);
         border-color: rgba(80, 120, 200, 0.5);
         background: rgba(80, 120, 200, 0.07);
     }
     &.del-btn--has-errors {
-        color: rgba(190, 120, 40, 0.8);
+        color: rgba(190, 120, 40, 0.85);
         border-color: rgba(200, 130, 40, 0.3);
         &:hover {
-            color: rgba(170, 100, 20, 0.9);
+            color: rgba(170, 100, 20, 0.95);
             border-color: rgba(200, 130, 40, 0.55);
             background: rgba(200, 130, 40, 0.07);
         }
