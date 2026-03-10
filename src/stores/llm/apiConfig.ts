@@ -11,7 +11,7 @@ import type { ProviderConfig } from './types';
 
 export const INFERENCE_DEFAULTS = {
   /** Hard cap on output tokens — keeps costs predictable */
-  maxTokens: 6000,
+  maxTokens: 5000,
   /** Low temperature for structured JSON output (0 = deterministic) */
   temperature: 0.3,
   /** Nucleus sampling — pair with temperature for quality/diversity balance */
@@ -55,9 +55,11 @@ export const PROVIDERS: ProviderConfig[] = [
     apiKeyLabel: 'Google AI API Key',
     requiresKey: true,
     models: [
-      { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', contextK: 1000 },
-      { id: 'gemini-1.5-pro',   label: 'Gemini 1.5 Pro',   contextK: 1000 },
-      { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', contextK: 1000 },
+      { id: 'gemini-3.1-pro-preview',        label: 'Gemini 3.1 Pro',        contextK: 1000 },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash-Lite',  contextK: 1000 },
+      { id: 'gemini-2.5-flash',              label: 'Gemini 2.5 Flash',       contextK: 1000 },
+      { id: 'gemini-2.0-flash',              label: 'Gemini 2.0 Flash',       contextK: 1000 },
+      { id: 'gemini-1.5-pro',                label: 'Gemini 1.5 Pro',         contextK: 1000 },
     ],
   },
   {
@@ -71,6 +73,17 @@ export const PROVIDERS: ProviderConfig[] = [
       { id: 'deepseek/deepseek-r1',               label: 'DeepSeek R1',   contextK: 64  },
       { id: 'mistralai/mistral-large',            label: 'Mistral Large', contextK: 128 },
       { id: 'qwen/qwen-2.5-72b-instruct',         label: 'Qwen 2.5 72B', contextK: 128 },
+    ],
+  },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com',
+    apiKeyLabel: 'DeepSeek API Key',
+    requiresKey: true,
+    models: [
+      { id: 'deepseek-chat',     label: 'DeepSeek Chat',     contextK: 128 },
+      { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner', contextK: 128 },
     ],
   },
   {

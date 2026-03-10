@@ -113,8 +113,8 @@ const selectedProviderConfig = computed(() => PROVIDERS.find((p) => p.id === llm
                         </div>
                     </section>
 
-                    <!-- ── Custom Base URL (Ollama / self-hosted) ─────────── -->
-                    <section v-if="llm.providerId === 'ollama' || llm.providerId === 'openrouter'" class="settings-section">
+                    <!-- ── Custom Base URL (Ollama / self-hosted / DeepSeek) ─────────── -->
+                    <section v-if="['ollama', 'openrouter', 'deepseek'].includes(llm.providerId)" class="settings-section">
                         <h3 class="section-title">
                             Base URL
                             <span class="section-hint">

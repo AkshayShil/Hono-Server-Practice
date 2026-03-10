@@ -2,7 +2,7 @@
 // types.ts — All shared interfaces and type aliases for the LLM module
 // ---------------------------------------------------------------------------
 
-export type ProviderId = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'ollama';
+export type ProviderId = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'deepseek' | 'ollama';
 export type PromptMode = 'lenient' | 'balanced' | 'rigorous' | 'clean';
 
 // ── Provider / Model ────────────────────────────────────────────────────────

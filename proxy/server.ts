@@ -7,6 +7,7 @@ import fs from 'fs';
 import { appendFile, mkdir } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { ankiProxy } from './routes/ankiProxy';
+import { llmProxy } from './routes/llm';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,7 +35,10 @@ app.use('*', cors());
 // 1. Anki-Connect Proxy
 app.route('/anki', ankiProxy);
 
-// 2. LLM Analysis Logging
+// 2. LLM Proxy (Secure Key Handling)
+app.route('/api/llm', llmProxy);
+
+// 3. LLM Analysis Logging
 app.post('/log-analysis', async (c) => {
   try {
     const data = await c.req.json();
