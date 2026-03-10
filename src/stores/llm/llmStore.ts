@@ -14,19 +14,36 @@ import { parseResponse } from './responseParser';
 
 import type { ProviderId, PromptMode, PromptTemplate, LLMFeedback, AnalyzeParams } from './types';
 
+// ── Environment Keys ─────────────────────────────────────────────────────
+const ENV_KEYS: Record<ProviderId, string> = {
+  openai:     import.meta.env.VITE_OPENAI_API_KEY     || '',
+  anthropic:  import.meta.env.VITE_ANTHROPIC_API_KEY  || '',
+  google:     import.meta.env.VITE_GOOGLE_API_KEY     || '',
+  openrouter: import.meta.env.VITE_OPENROUTER_API_KEY || '',
+  ollama:     import.meta.env.VITE_OLLAMA_API_KEY     || '',
+};
+
 export const useLLMStore = defineStore('llm', () => {
   const _cfg = loadConfig();
 
   // ── State ──────────────────────────────────────────────────────────────
   const providerId    = ref<ProviderId>(_cfg.providerId);
   const modelId       = ref<string>(_cfg.modelId);
-  const apiKey        = ref<string>(_cfg.apiKey);
   const promptMode    = ref<PromptMode | 'auto'>(_cfg.promptMode);
   const customBaseUrl = ref<string>(_cfg.customBaseUrl ?? '');
 
   // ── Derived ────────────────────────────────────────────────────────────
-  const provider = computed(() => PROVIDERS.find(p => p.id === providerId.value) ?? PROVIDERS[0]!);
-  const models   = computed(() => provider.value.models);
+  const availableProviders = computed(() => 
+    PROVIDERS.filter(p => !p.requiresKey || !!ENV_KEYS[p.id])
+  );
+
+  const provider = computed(() => 
+    availableProviders.value.find(p => p.id === providerId.value) ?? availableProviders.value[0]!
+  );
+
+  const models = computed(() => provider.value.models);
+
+  const apiKey = computed(() => ENV_KEYS[provider.value.id]);
 
   // Full model object — carries tokenParam and other per-model metadata
   const model = computed(() =>
@@ -45,7 +62,6 @@ export const useLLMStore = defineStore('llm', () => {
     persist();
   }
   function setModel(id: string): void            { modelId.value = id;        persist(); }
-  function setApiKey(key: string): void          { apiKey.value = key;        persist(); }
   function setPromptMode(m: PromptMode | 'auto'): void { promptMode.value = m; persist(); }
   function setCustomBaseUrl(url: string): void   { customBaseUrl.value = url; persist(); }
 
@@ -53,7 +69,7 @@ export const useLLMStore = defineStore('llm', () => {
     saveConfig({
       providerId: providerId.value,
       modelId: modelId.value,
-      apiKey: apiKey.value,
+      apiKey: '', // No longer persisted in localStorage
       promptMode: promptMode.value,
       customBaseUrl: customBaseUrl.value,
     });
@@ -125,9 +141,9 @@ export const useLLMStore = defineStore('llm', () => {
 
   // ── Public API ─────────────────────────────────────────────────────────
   return {
-    providerId, modelId, apiKey, promptMode, customBaseUrl,
-    provider, models, model, template,
-    setProvider, setModel, setApiKey, setPromptMode, setCustomBaseUrl,
+    providerId, modelId, promptMode, customBaseUrl,
+    provider, models, model, template, availableProviders, apiKey,
+    setProvider, setModel, setPromptMode, setCustomBaseUrl,
     resolveTemplate, analyze, cleanText,
     PROVIDERS, PROMPT_TEMPLATES,
   };

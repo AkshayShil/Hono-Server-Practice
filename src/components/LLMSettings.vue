@@ -82,7 +82,7 @@ const selectedProviderConfig = computed(() => PROVIDERS.find((p) => p.id === llm
                         <h3 class="section-title">Provider</h3>
                         <div class="provider-grid">
                             <button
-                                v-for="p in PROVIDERS"
+                                v-for="p in llm.availableProviders"
                                 :key="p.id"
                                 @click="llm.setProvider(p.id as ProviderId)"
                                 class="provider-btn"
@@ -91,10 +91,13 @@ const selectedProviderConfig = computed(() => PROVIDERS.find((p) => p.id === llm
                                 {{ p.label }}
                             </button>
                         </div>
+                        <p v-if="llm.availableProviders.length === 0" class="text-[10px] text-red-400 mt-1">
+                            No API keys found in .env file.
+                        </p>
                     </section>
 
                     <!-- ── Model ──────────────────────────────────────────── -->
-                    <section class="settings-section">
+                    <section v-if="llm.availableProviders.length > 0" class="settings-section">
                         <h3 class="section-title">Model</h3>
                         <div class="model-grid">
                             <button
@@ -110,21 +113,8 @@ const selectedProviderConfig = computed(() => PROVIDERS.find((p) => p.id === llm
                         </div>
                     </section>
 
-                    <!-- ── API Key ─────────────────────────────────────────── -->
-                    <section v-if="selectedProviderConfig?.requiresKey" class="settings-section">
-                        <h3 class="section-title">{{ selectedProviderConfig.apiKeyLabel }}</h3>
-                        <input
-                            :value="llm.apiKey"
-                            @input="llm.setApiKey(($event.target as HTMLInputElement).value)"
-                            type="password"
-                            class="text-input"
-                            placeholder="sk-…"
-                            autocomplete="off"
-                        />
-                    </section>
-
                     <!-- ── Custom Base URL (Ollama / self-hosted) ─────────── -->
-                    <section class="settings-section">
+                    <section v-if="llm.providerId === 'ollama' || llm.providerId === 'openrouter'" class="settings-section">
                         <h3 class="section-title">
                             Base URL
                             <span class="section-hint">

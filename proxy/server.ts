@@ -1,7 +1,10 @@
-import express from 'express';
-import cors from 'cors';
+import { Hono } from 'hono';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { cors } from 'hono/cors';
+import { logger } from 'hono/logger';
 import path from 'path';
 import fs from 'fs';
+import { appendFile, mkdir } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { ankiProxy } from './routes/ankiProxy';
 
@@ -10,32 +13,56 @@ const __dirname = path.dirname(__filename);
 const distPath = path.resolve(__dirname, '../dist');
 const indexPath = path.resolve(distPath, 'index.html');
 
-const app = express();
+const logsDir = path.resolve(__dirname, '../analysis_logs');
+const sessionLogFile = path.join(logsDir, `analysis-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`);
 
-// Enable CORS
-app.use(cors());
+export async function initLogs() {
+  try {
+    await mkdir(logsDir, { recursive: true });
+    console.log(`[Server] Analysis logs will be saved to: ${sessionLogFile}`);
+  } catch (err) {
+    console.error('[Server] Failed to create logs directory:', err);
+  }
+}
 
-// Debugging: Log every request to see what's happening
-app.use((req, res, next) => {
-  console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
-  next();
+const app = new Hono();
+
+// Middleware
+app.use('*', logger());
+app.use('*', cors());
+
+// 1. Anki-Connect Proxy
+app.route('/anki', ankiProxy);
+
+// 2. LLM Analysis Logging
+app.post('/log-analysis', async (c) => {
+  try {
+    const data = await c.req.json();
+    const entry = JSON.stringify({
+      ...data,
+      serverTimestamp: new Date().toISOString(),
+    }) + '\n';
+    await appendFile(sessionLogFile, entry);
+    return c.json({ status: 'ok' });
+  } catch (error) {
+    console.error('[Server] Failed to log analysis:', error);
+    return c.json({ error: 'Failed to log data' }, 500);
+  }
 });
 
-// 1. Anki Proxy
-app.use('/anki', ankiProxy);
+// 3. Serve Static Files
+app.use('/*', serveStatic({ root: './dist' }));
 
-// 2. Serve Static Files (this handles / and assets automatically)
-app.use(express.static(distPath));
-
-// 3. SPA Fallback: If no file was found and it's a GET request for HTML
-// We use a middleware function instead of app.get('*') to bypass Express 5's strict routing
-app.use((req, res, next) => {
-  if (req.method === 'GET' && !req.url.startsWith('/anki')) {
+// 4. SPA Fallback
+app.get('*', async (c, next) => {
+  const url = new URL(c.req.url);
+  if (!url.pathname.startsWith('/anki') && !url.pathname.includes('.')) {
     if (fs.existsSync(indexPath)) {
-      return res.sendFile(indexPath);
+      const content = fs.readFileSync(indexPath, 'utf-8');
+      return c.html(content);
     }
   }
-  next();
+  await next();
 });
 
 export default app;

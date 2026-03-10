@@ -55,9 +55,9 @@ describe('cardStore persistence', () => {
 
     const store = useCardStore();
     expect(store.cardQueue).toHaveLength(1);
-    expect(store.cardQueue[0].cardId).toBe(2);
+    expect(store.cardQueue[0]!.cardId).toBe(2);
     expect(store.processedCards).toHaveLength(1);
-    expect(store.processedCards[0].cardId).toBe(1);
+    expect(store.processedCards[0]!.cardId).toBe(1);
   });
 
   it('should handle JSON parse errors gracefully', () => {
