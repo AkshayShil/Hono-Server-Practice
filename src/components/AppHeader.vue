@@ -34,6 +34,17 @@ const handleMobileDeckSelect = async (deckName: string) => {
         if (modal) modal.close()
     }
 }
+
+const openResetModal = () => {
+    const modal = document.getElementById('reset_modal') as HTMLDialogElement
+    if (modal) modal.showModal()
+}
+
+const handleReset = async () => {
+    await store.resetSession()
+    const modal = document.getElementById('reset_modal') as HTMLDialogElement
+    if (modal) modal.close()
+}
 </script>
 
 <template>
@@ -42,6 +53,17 @@ const handleMobileDeckSelect = async (deckName: string) => {
             <h1 class="hidden sm:block text-sm font-light tracking-[0.3em] uppercase text-sakura-white/90">
                 Anki // 桜
             </h1>
+            <button 
+                @click="openResetModal"
+                class="hidden md:flex items-center gap-1.5 text-[9px] tracking-[0.3em] uppercase text-sakura-white/40 hover:text-sakura-white transition-colors duration-300 cursor-pointer"
+                title="Reset Session"
+            >
+                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                </svg>
+                Reset
+            </button>
 
             <select
                 v-model="selectedDeck"
@@ -62,6 +84,17 @@ const handleMobileDeckSelect = async (deckName: string) => {
                 @click="openDeckModal"
             >
                 {{ store.currentDeck || 'Select Deck' }}
+            </button>
+
+            <button
+                class="md:hidden bg-white/10 text-sakura-white/80 border border-white/20 p-2 hover:bg-white/20 transition-colors"
+                @click="openResetModal"
+                title="Reset Session"
+            >
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                </svg>
             </button>
         </div>
 
@@ -103,6 +136,35 @@ const handleMobileDeckSelect = async (deckName: string) => {
                         Close
                     </button>
                 </form>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+
+    <dialog id="reset_modal" class="modal">
+        <div class="modal-box bg-sakura-white p-0 rounded-none border-t-4 border-sakura-dark max-w-xs">
+            <div class="p-6 text-center">
+                <h3 class="font-bold text-xs uppercase tracking-[0.2em] text-sakura-text mb-4">
+                    Reset Session?
+                </h3>
+                <p class="text-[10px] text-sakura-text/60 uppercase tracking-widest leading-relaxed mb-6">
+                    This will clear your current queue and history.
+                </p>
+                <div class="flex gap-3">
+                    <form method="dialog" class="flex-1">
+                        <button class="w-full text-[9px] uppercase tracking-[0.2em] py-2 border border-sakura-text/10 hover:bg-sakura-pink/10 transition-all">
+                            Cancel
+                        </button>
+                    </form>
+                    <button 
+                        @click="handleReset"
+                        class="flex-1 text-[9px] uppercase tracking-[0.2em] py-2 bg-sakura-dark text-white hover:bg-sakura-text transition-all"
+                    >
+                        Reset
+                    </button>
+                </div>
             </div>
         </div>
         <form method="dialog" class="modal-backdrop">
