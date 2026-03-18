@@ -68,3 +68,34 @@ describe('cardStore persistence', () => {
     expect(store.processedCards).toEqual([]);
   });
 });
+
+describe('cardStore queue management', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+    vi.clearAllMocks();
+    // Mock global fetch
+    global.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ result: [], error: null }),
+      })
+    );
+  });
+
+  it('resetSession should clear queue and history and trigger refill', async () => {
+    const store = useCardStore();
+    (store as any).currentDeck = 'Default';
+    
+    // Pre-populate with mock data
+    (store as any).cardQueue = [{ cardId: 1 } as any];
+    (store as any).processedCards = [{ cardId: 2 } as any];
+    
+    // Trigger reset
+    await store.resetSession();
+    
+    expect(store.cardQueue).toEqual([]);
+    expect(store.processedCards).toEqual([]);
+    expect(global.fetch).toHaveBeenCalled();
+  });
+});

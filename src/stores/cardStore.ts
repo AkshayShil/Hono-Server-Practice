@@ -279,6 +279,15 @@ export const useCardStore = defineStore('cardStore', () => {
     }
   }
 
+  /**
+   * Clears the current session (queue and history) and refetches cards for the current deck.
+   */
+  async function resetSession(): Promise<void> {
+    cardQueue.value = [];
+    processedCards.value = [];
+    await fillQueue();
+  }
+
   // -------------------------------------------------------------------------
   // Review Actions
   // -------------------------------------------------------------------------
@@ -674,6 +683,7 @@ export const useCardStore = defineStore('cardStore', () => {
 
     init,
     fillQueue,
+    resetSession,
     answerCard,
     submitReview,
     sendRating,
