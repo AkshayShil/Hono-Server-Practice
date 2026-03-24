@@ -43,25 +43,13 @@ export function parseResponse(raw: string, template: PromptTemplate): LLMFeedbac
   feedback.score = Math.max(0, Math.min(100, Number(feedback.score) || 0));
   feedback.mode  = template.id;
 
-  const r = Number(feedback.suggestedRating);
-  feedback.suggestedRating       = ([1, 2, 3, 4].includes(r) ? r : 3) as 1 | 2 | 3 | 4;
-  feedback.suggestedRatingReason = feedback.suggestedRatingReason ?? '';
-  feedback.verdict               = feedback.verdict               ?? '';
-  feedback.exemplar              = feedback.exemplar              ?? '';
-  feedback.strengths             = Array.isArray(feedback.strengths)    ? feedback.strengths.slice(0, 4)    : [];
-  feedback.gaps                  = Array.isArray(feedback.gaps)         ? feedback.gaps.slice(0, 4)         : [];
-  feedback.improvements          = Array.isArray(feedback.improvements) ? feedback.improvements.slice(0, 4) : [];
-  feedback.quizzes               = Array.isArray(feedback.quizzes)      ? feedback.quizzes.slice(0, 3)      : [];
-
-  // Sanitise each quiz so the UI never crashes on a partial quiz object
-  feedback.quizzes = feedback.quizzes.map(q => ({
-    type:     q.type     ?? 'fill_blank',
-    prompt:   q.prompt   ?? '',
-    sentence: q.sentence ?? '',
-    options:  Array.isArray(q.options) ? q.options : [],
-    answer:   q.answer   ?? '',
-    hint:     q.hint     ?? '',
-  }));
+  const r = Number(feedback.rating);
+  feedback.rating       = ([1, 2, 3, 4].includes(r) ? r : 3) as 1 | 2 | 3 | 4;
+  feedback.ratingReason = feedback.ratingReason ?? '';
+  feedback.verdict      = feedback.verdict      ?? '';
+  feedback.strengths    = Array.isArray(feedback.strengths)    ? feedback.strengths.slice(0, 4)    : [];
+  feedback.gaps         = Array.isArray(feedback.gaps)         ? feedback.gaps.slice(0, 4)         : [];
+  feedback.improvements = Array.isArray(feedback.improvements) ? feedback.improvements.slice(0, 4) : [];
 
   return feedback;
 }

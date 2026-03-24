@@ -2,6 +2,8 @@ import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { useLLMStore, type LLMFeedback } from './llm/index';
 import { useErrorLogStore } from './errorLogStore';
+import { useFsrsStore } from './fsrsStore';
+import { State as FSRSState } from 'ts-fsrs';
 
 /** AnkiConnect proxy endpoint handled by the Express middleman. */
 const ANKI_CONNECT_URL = '/anki';
@@ -65,12 +67,23 @@ interface AnkiCardInfo {
   question: string;
   answer: string;
   css: string;
+  /** Anki internal queue: 0=new, 1=learning, 2=review, 3=day-learn */
+  queue?: number;
 }
 
 interface AnkiDeckStats {
   new_count: number;
   learn_count: number;
   review_count: number;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Strips HTML tags for plain-text LLM input. */
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '').trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +155,14 @@ function loadSession(): { queue: Card[], history: ProcessedCard[] } | null {
   }
 }
 
+export interface AnalysisSyncParams {
+  cardId: number;
+  question: string;
+  cardAnswer: string;
+  userAnswer: string;
+  deckName: string;
+}
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -191,6 +212,9 @@ export const useCardStore = defineStore('cardStore', () => {
    */
   async function init(): Promise<void> {
     try {
+      const fsrs = useFsrsStore();
+      await fsrs.loadState();
+
       const deckMap = await invoke<Record<string, number>>('deckNamesAndIds');
       const allDecks = Object.keys(deckMap)
         .filter((d) => d !== 'Default')
@@ -227,38 +251,39 @@ export const useCardStore = defineStore('cardStore', () => {
 
     isFetching.value = true;
     try {
-      const query = `deck:"${targetDeck}" (is:due OR is:new)`;
+      // Fetch ALL cards in the deck, not just those Anki thinks are due
+      const query = `deck:"${targetDeck}"`;
       const cardIds = await invoke<number[]>('findCards', { query });
 
       if (cardIds.length === 0) return;
 
+      const fsrsStore = useFsrsStore();
+      const dueIds = fsrsStore.getDueIds(cardIds);
+
       const existingIds = new Set(cardQueue.value.map((c) => c.cardId));
-      const freshIds = cardIds.filter((id) => !existingIds.has(id));
+      const processedIds = new Set(processedCards.value.map((c) => c.cardId));
+      const freshIds = dueIds.filter((id) => !existingIds.has(id) && !processedIds.has(id));
 
       if (freshIds.length === 0) return;
 
       const rawCards = await invoke<AnkiCardInfo[]>('cardsInfo', { cards: freshIds });
 
       console.debug('[fillQueue] cardsInfo returned', rawCards.length, 'cards');
-      if (rawCards[0]) {
-        const fieldKeys = Object.keys(rawCards[0].fields);
-        const firstKey = fieldKeys[0];
-        console.debug('[fillQueue] field keys on first card:', fieldKeys);
-        if (firstKey) {
-          console.debug('[fillQueue] first field value:', rawCards[0].fields[firstKey]?.value?.slice(0, 200));
-        }
-      }
 
       const cards: Card[] = rawCards.map((raw) => {
         // Fields are ordered — sort by .order and take front/back by position.
         const ordered = Object.values(raw.fields).sort((a, b) => a.order - b.order);
         const question = ordered[0]?.value ?? '';
         const answer   = ordered[1]?.value ?? '';
-        // AnkiConnect cardsInfo doesn't expose queue type directly.
-        // We use the queue field: 0=new, 1=learning, 2=review, 3=day-learn
-        const queueNum = (raw as unknown as { queue?: number }).queue ?? 2;
+        
+        // Derive card type from FSRS state instead of Anki queue
+        const fsrsCard = fsrsStore.getCardState(raw.cardId);
+        const fsrsState = fsrsCard?.state ?? FSRSState.New;
         const cardType: 'new' | 'learn' | 'review' =
-          queueNum === 0 ? 'new' : queueNum === 1 || queueNum === 3 ? 'learn' : 'review';
+          fsrsState === FSRSState.New ? 'new'
+          : fsrsState === FSRSState.Review ? 'review'
+          : 'learn'; // Learning + Relearning both map to 'learn'
+
         return {
           cardId: raw.cardId,
           noteId: raw.note,
@@ -295,7 +320,7 @@ export const useCardStore = defineStore('cardStore', () => {
   /**
    * Sends successful analysis results to the server's logging endpoint.
    */
-  async function syncAnalysisToServer(params: any, feedback: any) {
+  async function syncAnalysisToServer(params: AnalysisSyncParams, feedback: LLMFeedback) {
     try {
       await fetch('/log-analysis', {
         method: 'POST',
@@ -303,40 +328,11 @@ export const useCardStore = defineStore('cardStore', () => {
         body: JSON.stringify({
           ...params,
           ...feedback,
-          feedback,
           clientTimestamp: new Date().toISOString()
         }),
       });
     } catch (err) {
       console.warn('[Sync] Failed to send analysis to server:', err);
-    }
-  }
-
-  /**
-   * Submits an ease rating directly to AnkiConnect, removes the card from
-   * the local queue, and triggers a background refill if running low.
-   *
-   * AnkiConnect action: answerCards → boolean
-   *
-   * @param ease - 1 (Again), 2 (Hard), 3 (Good), 4 (Easy).
-   */
-  async function answerCard(cardId: number, ease: number): Promise<boolean> {
-    try {
-      await invoke<boolean>('answerCards', {
-        answers: [{ cardId, ease }],
-      });
-
-      const index = cardQueue.value.findIndex((c) => c.cardId === cardId);
-      if (index > -1) cardQueue.value.splice(index, 1);
-
-      if (cardQueue.value.length < QUEUE_REFILL_THRESHOLD && currentDeck.value) {
-        void fillQueue(currentDeck.value);
-      }
-
-      return true;
-    } catch (err) {
-      console.error(`CardStore.answerCard (cardId=${cardId}):`, err);
-      return false;
     }
   }
 
@@ -371,10 +367,15 @@ export const useCardStore = defineStore('cardStore', () => {
     const queueIndex = cardQueue.value.findIndex(c => c.cardId === cardToAnalyze.cardId);
     if (queueIndex > -1) cardQueue.value.splice(queueIndex, 1);
 
+    // Refill queue if low
+    if (cardQueue.value.length < QUEUE_REFILL_THRESHOLD && currentDeck.value) {
+      void fillQueue(currentDeck.value);
+    }
+
     try {
       const feedback = await llm.analyze({
-        question:      cardToAnalyze.question.replace(/<[^>]*>/g, ''),
-        correctAnswer: cardToAnalyze.answer.replace(/<[^>]*>/g, ''),
+        question:      stripHtml(cardToAnalyze.question),
+        correctAnswer: stripHtml(cardToAnalyze.answer),
         userAnswer:    plainText,
         cardType:      cardToAnalyze.cardType,
       });
@@ -391,7 +392,7 @@ export const useCardStore = defineStore('cardStore', () => {
       const errorLog = useErrorLogStore();
       errorLog.captureSuccess({
         cardId:          cardToAnalyze.cardId,
-        question:        cardToAnalyze.question.replace(/<[^>]*>/g, ''),
+        question:        stripHtml(cardToAnalyze.question),
         userAnswer:      plainText,
         provider:        llm.provider.label,
         model:           llm.modelId,
@@ -400,16 +401,16 @@ export const useCardStore = defineStore('cardStore', () => {
         strengths:       feedback.strengths,
         gaps:            feedback.gaps,
         improvements:    feedback.improvements,
-        exemplar:        feedback.exemplar,
-        suggestedRating: feedback.suggestedRating,
+        rating: feedback.rating,
       });
 
       // Sync successful analysis to server for logging
       void syncAnalysisToServer({
         cardId:     cardToAnalyze.cardId,
-        question:   cardToAnalyze.question.replace(/<[^>]*>/g, ''),
-        cardAnswer: cardToAnalyze.answer.replace(/<[^>]*>/g, ''),
+        question:   stripHtml(cardToAnalyze.question),
+        cardAnswer: stripHtml(cardToAnalyze.answer),
         userAnswer: plainText,
+        deckName:   currentDeck.value,
       }, feedback);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Analysis failed';
@@ -422,7 +423,7 @@ export const useCardStore = defineStore('cardStore', () => {
       const errorLog = useErrorLogStore();
       errorLog.captureError({
         cardId:       cardToAnalyze.cardId,
-        question:     cardToAnalyze.question.replace(/<[^>]*>/g, ''),
+        question:     stripHtml(cardToAnalyze.question),
         userAnswer:   plainText,
         errorMessage: message,
         provider:     llm.provider.label,
@@ -436,10 +437,20 @@ export const useCardStore = defineStore('cardStore', () => {
    * in session history.
    */
   async function sendRating(cardId: number, ease: number): Promise<void> {
-    const success = await answerCard(cardId, ease);
-    if (!success) return;
+    const fsrs = useFsrsStore();
+    await fsrs.submitRating(cardId, ease as 1 | 2 | 3 | 4);
+
+    // Remove card from queue (if it's still there, though submitReview usually removes it)
+    const index = cardQueue.value.findIndex((c) => c.cardId === cardId);
+    if (index > -1) cardQueue.value.splice(index, 1);
+
     const entry = processedCards.value.find((c) => c.cardId === cardId);
     if (entry) entry.rated = true;
+
+    // Refill if low
+    if (cardQueue.value.length < QUEUE_REFILL_THRESHOLD && currentDeck.value) {
+      void fillQueue(currentDeck.value);
+    }
   }
 
   /**
@@ -458,8 +469,8 @@ export const useCardStore = defineStore('cardStore', () => {
     void (async () => {
       try {
         const feedback = await llm.analyze({
-          question:      entry.question.replace(/<[^>]*>/g, ''),
-          correctAnswer: entry.answer.replace(/<[^>]*>/g, ''),
+          question:      stripHtml(entry.question),
+          correctAnswer: stripHtml(entry.answer),
           userAnswer:    entry.userResponse,
           cardType:      entry.cardType,
         });
@@ -474,7 +485,7 @@ export const useCardStore = defineStore('cardStore', () => {
         const errorLog = useErrorLogStore();
         errorLog.captureSuccess({
           cardId,
-          question:        entry.question.replace(/<[^>]*>/g, ''),
+          question:        stripHtml(entry.question),
           userAnswer:      entry.userResponse,
           provider:        llm.provider.label,
           model:           llm.modelId,
@@ -483,16 +494,16 @@ export const useCardStore = defineStore('cardStore', () => {
           strengths:       feedback.strengths,
           gaps:            feedback.gaps,
           improvements:    feedback.improvements,
-          exemplar:        feedback.exemplar,
-          suggestedRating: feedback.suggestedRating,
+          rating: feedback.rating,
         });
 
         // Sync successful analysis to server for logging
         void syncAnalysisToServer({
           cardId,
-          question:   entry.question.replace(/<[^>]*>/g, ''),
-          cardAnswer: entry.answer.replace(/<[^>]*>/g, ''),
+          question:   stripHtml(entry.question),
+          cardAnswer: stripHtml(entry.answer),
           userAnswer: entry.userResponse,
+          deckName:   currentDeck.value,
         }, feedback);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Analysis failed';
@@ -501,7 +512,7 @@ export const useCardStore = defineStore('cardStore', () => {
         const errorLog = useErrorLogStore();
         errorLog.captureError({
           cardId,
-          question:     entry.question.replace(/<[^>]*>/g, ''),
+          question:     stripHtml(entry.question),
           userAnswer:   entry.userResponse,
           errorMessage: `[RETRY] ${message}`,
           provider:     llm.provider.label,
@@ -563,15 +574,9 @@ export const useCardStore = defineStore('cardStore', () => {
    * AnkiConnect action: guiDeckReview
    */
   async function selectDeck(deckName: string): Promise<boolean> {
-    try {
-      await invoke<null>('guiDeckReview', { name: deckName });
-      cardQueue.value = [];
-      currentDeck.value = deckName;
-      return true;
-    } catch (err) {
-      console.error(`CardStore.selectDeck (deck=${deckName}):`, err);
-      return false;
-    }
+    cardQueue.value = [];
+    currentDeck.value = deckName;
+    return true;
   }
 
   // -------------------------------------------------------------------------
@@ -684,7 +689,6 @@ export const useCardStore = defineStore('cardStore', () => {
     init,
     fillQueue,
     resetSession,
-    answerCard,
     submitReview,
     sendRating,
     retryAnalysis,

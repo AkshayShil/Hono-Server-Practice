@@ -232,7 +232,7 @@ function closeCard(): void {
                         <span class="suggested-chip">
                             AI:
                             {{
-                                ['Again', 'Hard', 'Good', 'Easy'][card.feedback.suggestedRating - 1]
+                                ['Again', 'Hard', 'Good', 'Easy'][card.feedback.rating - 1]
                             }}
                         </span>
                         <span class="tap-hint">Tap to review & grade →</span>

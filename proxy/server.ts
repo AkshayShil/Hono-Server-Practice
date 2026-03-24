@@ -8,6 +8,7 @@ import { appendFile, mkdir } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { ankiProxy } from './routes/ankiProxy';
 import { llmProxy } from './routes/llm';
+import { fsrsRouter } from './routes/fsrs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,14 +16,16 @@ const distPath = path.resolve(__dirname, '../dist');
 const indexPath = path.resolve(distPath, 'index.html');
 
 const logsDir = path.resolve(__dirname, '../analysis_logs');
-const sessionLogFile = path.join(logsDir, `analysis-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`);
+const dataDir = path.resolve(__dirname, 'data');
 
 export async function initLogs() {
   try {
     await mkdir(logsDir, { recursive: true });
-    console.log(`[Server] Analysis logs will be saved to: ${sessionLogFile}`);
+    console.log(`[Server] Analysis logs directory: ${logsDir}`);
+    await mkdir(dataDir, { recursive: true });
+    console.log(`[Server] FSRS data directory: ${dataDir}`);
   } catch (err) {
-    console.error('[Server] Failed to create logs directory:', err);
+    console.error('[Server] Failed to create directories:', err);
   }
 }
 
@@ -38,15 +41,25 @@ app.route('/anki', ankiProxy);
 // 2. LLM Proxy (Secure Key Handling)
 app.route('/api/llm', llmProxy);
 
-// 3. LLM Analysis Logging
+// 3. FSRS Scheduling
+app.route('/fsrs', fsrsRouter);
+
+// 4. LLM Analysis Logging
 app.post('/log-analysis', async (c) => {
   try {
     const data = await c.req.json();
+    
+    // Determine log file name based on date and deck
+    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const deckName = (data.deckName || 'unknown').replace(/[^a-z0-9]/gi, '_');
+    const logFile = path.join(logsDir, `analysis-${dateStr}-${deckName}.jsonl`);
+
     const entry = JSON.stringify({
       ...data,
       serverTimestamp: new Date().toISOString(),
     }) + '\n';
-    await appendFile(sessionLogFile, entry);
+    
+    await appendFile(logFile, entry);
     return c.json({ status: 'ok' });
   } catch (error) {
     console.error('[Server] Failed to log analysis:', error);

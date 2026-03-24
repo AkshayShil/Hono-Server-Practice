@@ -57,13 +57,11 @@ export interface Quiz {
 export interface LLMFeedback {
   score: number;
   verdict: string;
-  suggestedRating: 1 | 2 | 3 | 4;
-  suggestedRatingReason: string;
+  rating: 1 | 2 | 3 | 4;
+  ratingReason: string;
   strengths: string[];
   gaps: string[];
   improvements: string[];
-  exemplar: string;
-  quizzes: Quiz[];
   mode: PromptMode;
 }
 

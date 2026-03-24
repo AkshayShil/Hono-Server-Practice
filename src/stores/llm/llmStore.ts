@@ -11,7 +11,7 @@ import { PROMPT_TEMPLATES } from './promptTemplates';
 import { loadConfig, saveConfig } from './persistence';
 import { parseResponse } from './responseParser';
 
-import type { ProviderId, PromptMode, PromptTemplate, LLMFeedback, AnalyzeParams, ProviderConfig } from './types';
+import type { ProviderId, PromptMode, PromptTemplate, LLMFeedback, AnalyzeParams } from './types';
 
 // The base URL of our Hono proxy server
 const PROXY_BASE_URL = import.meta.env.VITE_PROXY_URL || '';

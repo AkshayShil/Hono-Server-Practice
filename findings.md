@@ -1,19 +1,19 @@
-# Findings - Fix 403 on POST /anki
+# Findings - Session Reset Verification
 
-## Discovery Log
-- **2026-03-06**: `POST /anki` returns 403 from Anki-Connect.
-- **2026-03-06**: Proxy implementation is manual in `proxy/index.ts`.
-- **2026-03-06**: `host` and `content-length` headers are deleted before forwarding.
-- **2026-03-06**: Anki-Connect configuration whitelists `http://localhost` and `http://localhost:5173`.
-- **2026-03-06**: User confirmed the fix (Origin override) is working.
+## Code Review Findings
+| Component | Status | Notes |
+|-----------|--------|-------|
+| cardStore.ts | Verified | `resetSession` implemented, clears `cardQueue` and `processedCards`, then calls `fillQueue`. |
+| AppHeader.vue | Verified | Reset button added for both Desktop (text + icon) and Mobile (icon only). DaisyUI modal `reset_modal` added for confirmation. |
 
-## Root Cause
-Anki-Connect enforces CORS checks based on the `Origin` header. The proxy was forwarding the frontend's origin (`http://localhost:3020`), which was not in Anki-Connect's whitelist (`webCorsOriginList`). This resulted in a `403 Forbidden` error.
+## Test Results
+| Test File | Status | Failures |
+|-----------|--------|----------|
+| cardStore.spec.ts | Passed | 0 failures. `resetSession` test passed. |
 
-## Fix
-The proxy now overrides the `Origin` header to `http://localhost` (which is whitelisted) and sets the `Host` header to `127.0.0.1:8765`. This makes the request appear as if it's coming from a whitelisted local client.
-
-```typescript
-headers.set('host', '127.0.0.1:8765');
-headers.set('origin', 'http://localhost');
-```
+## UI/UX Observations
+| Feature | Observation |
+|---------|-------------|
+| Reset Button (Desktop) | Small text "RESET" with icon, uppercase, tracking-widest, subtle colors (`sakura-white/40`), matches "Anki // 桜" style. |
+| Reset Button (Mobile) | Icon-only button, consistent with deck selector button on mobile. |
+| Confirmation Dialog | Minimalist DaisyUI modal, clear "Reset Session?" heading, consistent with Sakura theme (border-t-4 border-sakura-dark). |

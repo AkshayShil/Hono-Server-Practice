@@ -23,23 +23,51 @@ const editorIsEmpty = computed(
     () => editorContent.value.replace(/<[^>]*>/g, '').trim().length === 0,
 )
 
+const analyzeTooltip = computed(() => {
+    if (!currentCard.value) return 'No card loaded to analyze'
+    if (editorIsEmpty.value) return 'Please enter your reflection first'
+    return 'Analyze your reflection (⌘↵)'
+})
+
+const cleanTooltip = computed(() => {
+    if (!currentCard.value) return 'No card loaded'
+    if (editorIsEmpty.value) return 'Please enter text to clean'
+    if (isCleaning.value) return 'Cleaning text...'
+    return 'Refine voice-to-text with AI'
+})
+
 const toolbarOptions = [
     ['bold', 'italic', 'underline'],
     [{ list: 'ordered' }, { list: 'bullet' }],
+    [{ indent: '-1' }, { indent: '+1' }],
     ['blockquote', 'code-block'],
     ['clean'],
 ]
 
+const quillEditorRef = ref<any>(null)
+
 function resetEditor(): void {
     editorContent.value = ''
+    if (quillEditorRef.value) {
+        // Force Quill to clear its internal state
+        quillEditorRef.value.setHTML('')
+    }
     showUndo.value = false
     if (cleanupTimer) clearTimeout(cleanupTimer)
 }
 
 async function submitResponse(): Promise<void> {
     if (!currentCard.value || editorIsEmpty.value) return
-    await store.submitReview(editorContent.value)
+    
+    // Capture content and reset UI immediately to allow moving to next card
+    const content = editorContent.value
     resetEditor()
+
+    // Start analysis in background - don't await the whole thing here
+    // so the button is re-enabled for the next card immediately.
+    store.submitReview(content).catch(err => {
+        console.error('Background analysis failed:', err)
+    })
 }
 
 watch(currentCard, (card) => {
@@ -209,7 +237,7 @@ async function fetchCards(): Promise<void> {
         </Transition>
 
         <!-- ── Main layout ───────────────────────────────────────────────────── -->
-        <div class="flex-1 px-6 md:px-16 py-6 flex flex-col">
+        <div class="flex-1 px-6 md:px-16 pt-6 pb-12 md:pb-6 flex flex-col">
             <div class="max-w-2xl mx-auto w-full flex flex-col gap-6">
                 <!-- Question — only visible when a card is loaded -->
                 <div v-if="currentCard" class="animate-fade-in space-y-4">
@@ -261,6 +289,8 @@ async function fetchCards(): Promise<void> {
                     </div>
 
                     <QuillEditor
+                        ref="quillEditorRef"
+                        :key="currentCard?.cardId ?? 'empty'"
                         v-model:content="editorContent"
                         content-type="html"
                         theme="snow"
@@ -271,11 +301,11 @@ async function fetchCards(): Promise<void> {
                         @keydown.meta.enter="submitResponse"
                     />
 
-                    <div class="pt-5 flex items-center justify-between">
+                    <div class="pt-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
                         <button
                             @click="fetchCards"
                             :disabled="fetchStatus === 'fetching'"
-                            class="fetch-btn flex items-center gap-2 px-5 py-2.5"
+                            class="fetch-btn flex items-center justify-center gap-2 px-5 py-3 md:py-2.5 w-full md:w-auto order-4 md:order-1"
                         >
                             <svg
                                 class="w-3 h-3"
@@ -293,11 +323,19 @@ async function fetchCards(): Promise<void> {
                             Fetch Cards
                         </button>
 
-                        <div class="flex items-center gap-4">
+                        <div class="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 w-full md:w-auto order-1 md:order-2">
+                            <button
+                                @click="resetEditor"
+                                :disabled="editorIsEmpty"
+                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted/30 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
+                            >
+                                Reset
+                            </button>
+
                             <button
                                 v-if="showUndo"
                                 @click="undoClean"
-                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-pink bg-sakura-pink/10 text-sakura-text hover:bg-sakura-pink transition-all duration-500 cursor-pointer"
+                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-pink bg-sakura-pink/10 text-sakura-text hover:bg-sakura-pink transition-all duration-500 cursor-pointer w-full md:w-auto"
                             >
                                 Undo Clean
                             </button>
@@ -305,7 +343,8 @@ async function fetchCards(): Promise<void> {
                                 v-else
                                 @click="cleanEditorText"
                                 :disabled="editorIsEmpty || !currentCard || isCleaning"
-                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted/50 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer"
+                                :title="cleanTooltip"
+                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted/50 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
                             >
                                 {{ isCleaning ? 'Cleaning…' : 'Clean Voice Text' }}
                             </button>
@@ -313,7 +352,8 @@ async function fetchCards(): Promise<void> {
                             <button
                                 @click="submitResponse"
                                 :disabled="editorIsEmpty || !currentCard"
-                                class="px-10 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted text-sakura-muted hover:bg-sakura-pink hover:border-sakura-pink hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer"
+                                :title="analyzeTooltip"
+                                class="px-10 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted text-sakura-muted hover:bg-sakura-pink hover:border-sakura-pink hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
                             >
                                 Analyze
                             </button>
@@ -352,10 +392,16 @@ async function fetchCards(): Promise<void> {
 
 // ── Question text ────────────────────────────────────────────────────────
 :deep(.card-question) {
-    font-size: 1.5rem;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 1em;
     font-weight: 400;
-    line-height: 1.85;
+    line-height: 1.6;
     color: @color-text-dark;
+
+    @media (min-width: 768px) {
+        font-size: 1.5rem;
+        line-height: 1.85;
+    }
 
     p {
         margin: 0 0 0.5em;

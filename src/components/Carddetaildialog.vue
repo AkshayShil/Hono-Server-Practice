@@ -31,12 +31,18 @@ const RATINGS = [
     { value: 4, label: 'Easy', hint: 'Perfect recall, no hesitation', color: 'rating--easy' },
 ] as const
 
-const suggestedRating = computed(() => props.card.feedback?.suggestedRating ?? 3)
-const suggestedReason = computed(() => props.card.feedback?.suggestedRatingReason ?? '')
+const rating = computed(() => props.card.feedback?.rating ?? 3)
+const ratingReason = computed(() => props.card.feedback?.ratingReason ?? '')
 
-async function grade(rating: number): Promise<void> {
-    await store.sendRating(props.card.cardId, rating)
+async function grade(r: number): Promise<void> {
+    await store.sendRating(props.card.cardId, r)
     emit('close')
+}
+
+async function autograde(): Promise<void> {
+    if (props.card.feedback?.rating) {
+        await grade(props.card.feedback.rating)
+    }
 }
 
 function removeCard(): void {
@@ -147,19 +153,36 @@ function keepAndClose(): void {
 
                             <!-- AI suggestion banner -->
                             <div v-if="card.feedback" class="suggestion-banner">
-                                <div class="suggestion-label">AI suggests</div>
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="suggestion-label">AI suggests</div>
+                                    <button
+                                        @click="autograde"
+                                        class="hidden md:flex items-center gap-1.5 px-3 py-1 bg-sakura-pink text-sakura-text rounded-lg text-[10px] tracking-wider uppercase font-bold hover:bg-sakura-pink/80 transition-all border border-sakura-pink shadow-sm"
+                                    >
+                                        <svg
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2.5"
+                                            class="w-3 h-3"
+                                        >
+                                            <polyline points="20 6 9 17 4 12" />
+                                        </svg>
+                                        Auto-grade
+                                    </button>
+                                </div>
                                 <div class="suggestion-body">
                                     <span
                                         class="suggestion-rating"
                                         :class="
-                                            RATINGS.find((r) => r.value === suggestedRating)?.color
+                                            RATINGS.find((r) => r.value === rating)?.color
                                         "
                                     >
                                         {{
-                                            RATINGS.find((r) => r.value === suggestedRating)?.label
+                                            RATINGS.find((r) => r.value === rating)?.label
                                         }}
                                     </span>
-                                    <span class="suggestion-reason">{{ suggestedReason }}</span>
+                                    <span class="suggestion-reason">{{ ratingReason }}</span>
                                 </div>
                                 <p class="suggestion-note">You have the final say.</p>
                             </div>
@@ -175,14 +198,14 @@ function keepAndClose(): void {
                                         r.color,
                                         {
                                             'rating-btn--suggested':
-                                                r.value === suggestedRating && !!card.feedback,
+                                                r.value === rating && !!card.feedback,
                                         },
                                     ]"
                                 >
                                     <span class="rating-label">{{ r.label }}</span>
                                     <span class="rating-hint">{{ r.hint }}</span>
                                     <span
-                                        v-if="r.value === suggestedRating && card.feedback"
+                                        v-if="r.value === rating && card.feedback"
                                         class="ai-tag"
                                         >AI pick</span
                                     >

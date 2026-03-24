@@ -1,36 +1,32 @@
-# Task Plan - Fix 403 on POST /anki
+# Task Plan - Verification of Session Reset Implementation
 
 ## Goal
-Identify and fix the root cause of the 403 Forbidden error when making a POST request to `/anki` (proxied to Anki-Connect).
-
-## Status
-- [x] Phase 1: Root Cause Investigation `complete`
-- [x] Phase 2: Pattern Analysis `complete`
-- [x] Phase 3: Hypothesis and Testing `complete`
-- [x] Phase 4: Implementation `complete`
+Verify the implementation of Task 1 (Update Card Store) and Task 2 (Add Reset Button and Dialog to AppHeader).
 
 ## Phases
+- [x] Phase 1: Research & Code Review <!-- id: 0 -->
+- [x] Phase 2: Unit Test Verification <!-- id: 1 -->
+- [x] Phase 3: UI Component Verification <!-- id: 2 -->
+- [x] Phase 4: Integration & Functional Verification <!-- id: 3 -->
+- [ ] Phase 5: Final Report <!-- id: 4 -->
 
-### Phase 1: Root Cause Investigation
-- [x] Analyze logs (Done in user request - `[Proxy] Anki-Connect responded with 403`)
-- [x] Inspect `proxy/index.ts` for header manipulation
-- [x] Research Anki-Connect 403 error causes (CORS, Host header, Origin header)
-- [x] Reproduce the issue with diagnostic logging (Added detailed header logging to `proxy/index.ts`)
+## Phase 1: Research & Code Review
+- [x] Examine `src/stores/cardStore.ts` for `resetSession` logic.
+- [x] Examine `src/components/AppHeader.vue` for Reset button and Dialog.
+- [x] Check for Desktop and Mobile responsive design for the Reset button.
 
-### Phase 2: Pattern Analysis
-- [x] Check how `http-proxy-middleware` handled headers (if it worked before)
-- [x] Compare current manual proxy implementation with successful Anki-Connect proxy examples
+## Phase 2: Unit Test Verification
+- [x] Run `npm test src/__tests__/cardStore.spec.ts`.
+- [x] Check if `resetSession` is specifically tested.
 
-### Phase 3: Hypothesis and Testing
-- [x] Formulate hypothesis (Origin/Host header mismatch)
-- [x] Test minimally by modifying headers in `proxy/index.ts` (Setting Origin to whitelisted `http://localhost`)
+## Phase 3: UI Component Verification
+- [x] Verify the presence of the Reset button in `AppHeader.vue`.
+- [x] Verify the presence and logic of the confirmation dialog.
 
-### Phase 4: Implementation
-- [x] Apply the fix (Override Origin to whitelisted domain, set Host to `127.0.0.1:8765`)
-- [x] Verify the fix (User confirmed it is working)
+## Phase 4: Integration & Functional Verification
+- [x] Verify that clicking the Reset button triggers the confirmation dialog.
+- [x] Verify that confirming the reset calls `resetSession` in `cardStore`.
+- [x] Verify that `resetSession` correctly clears the session state.
 
-## Errors Encountered
-| Error | Attempt | Resolution |
-|-------|---------|------------|
-| POST /anki 403 | 1 | Stripped Origin/Referer headers |
-| POST /anki 403 | 2 | Set Origin to http://localhost and Host to 127.0.0.1:8765 |
+## Phase 5: Final Report
+- [ ] Document findings and confirm if all requirements are met.

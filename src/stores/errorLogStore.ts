@@ -31,9 +31,8 @@ export interface ReviewLogEntry {
   strengths?: string[];
   gaps?: string[];
   improvements?: string[];
-  exemplar?: string;
-  suggestedRating?: number;
-  suggestedRatingReason?: string;
+  rating?: number;
+  ratingReason?: string;
   // Populated on error
   errorMessage?: string;
 }
@@ -129,7 +128,7 @@ export const useErrorLogStore = defineStore('errorLog', () => {
   /** Capture an LLM failure */
   function captureError(entry: Omit<ReviewLogEntry,
     'timestamp' | 'type' | 'score' | 'verdict' | 'strengths' |
-    'gaps' | 'improvements' | 'exemplar' | 'suggestedRating' | 'suggestedRatingReason'>
+    'gaps' | 'improvements' | 'rating' | 'ratingReason'>
   ): void {
     entries.value.push({ ...entry, type: 'error', timestamp: new Date().toISOString() });
     void autoWriteIfDesktop();
