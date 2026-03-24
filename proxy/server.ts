@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { ankiProxy } from './routes/ankiProxy';
 import { llmProxy } from './routes/llm';
 import { fsrsRouter } from './routes/fsrs';
+import { syncRouter } from './routes/sync';
 import { initSchema } from './utils/db';
 import { migrate } from './utils/migrate';
 
@@ -53,7 +54,10 @@ app.route('/api/llm', llmProxy);
 // 3. FSRS Scheduling
 app.route('/fsrs', fsrsRouter);
 
-// 4. LLM Analysis Logging
+// 4. Syncing (Anki to SQLite)
+app.route('/sync', syncRouter);
+
+// 5. LLM Analysis Logging
 app.post('/log-analysis', async (c) => {
   try {
     const data = await c.req.json();
