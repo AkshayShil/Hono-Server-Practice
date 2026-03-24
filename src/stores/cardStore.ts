@@ -32,6 +32,11 @@ export interface Card {
   cardType: 'new' | 'learn' | 'review';
 }
 
+export interface Deck {
+  name: string;
+  id: number;
+}
+
 export interface ProcessedCard extends Card {
   status: 'analyzing' | 'success' | 'error';
   userResponse: string;
@@ -168,13 +173,14 @@ export interface AnalysisSyncParams {
 // ---------------------------------------------------------------------------
 
 export const useCardStore = defineStore('cardStore', () => {
-  const decks = ref<string[]>([]);
+  const decks = ref<Deck[]>([]);
   const currentDeck = ref<string>(readPersistedDeck());
   
   const saved = loadSession();
   const cardQueue = ref<Card[]>(saved?.queue ?? []);
   const processedCards = ref<ProcessedCard[]>(saved?.history ?? []);
   const isFetching = ref(false);
+  const isSyncing = ref(false);
 
   const currentCard = computed<Card | null>(() => cardQueue.value[0] ?? null);
 
@@ -205,28 +211,61 @@ export const useCardStore = defineStore('cardStore', () => {
   // -------------------------------------------------------------------------
 
   /**
+   * Syncs decks from Anki to SQLite and updates the local state.
+   */
+  async function syncDecks(): Promise<void> {
+    isSyncing.value = true;
+    try {
+      const res = await fetch('/sync/decks');
+      if (!res.ok) throw new Error('Failed to sync decks');
+      const data = await res.json();
+      if (data.decks) {
+        decks.value = (data.decks as Deck[])
+          .filter((d) => d.name !== 'Default')
+          .sort((a, b) => a.name.localeCompare(b.name));
+      }
+    } catch (err) {
+      console.error('CardStore.syncDecks:', err);
+    } finally {
+      isSyncing.value = false;
+    }
+  }
+
+  /**
+   * Syncs cards for a specific deck from Anki to SQLite.
+   */
+  async function syncDeckCards(deckId: number): Promise<void> {
+    isSyncing.value = true;
+    try {
+      const res = await fetch('/sync/deck-cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deckId }),
+      });
+      if (!res.ok) throw new Error('Failed to sync deck cards');
+    } catch (err) {
+      console.error(`CardStore.syncDeckCards (deckId=${deckId}):`, err);
+    } finally {
+      isSyncing.value = false;
+    }
+  }
+
+  /**
    * Loads all deck names from AnkiConnect and restores the persisted active
    * deck (falling back to the first deck alphabetically).
-   *
-   * AnkiConnect action: deckNamesAndIds → { deckName: deckId }
    */
   async function init(): Promise<void> {
     try {
       const fsrs = useFsrsStore();
       await fsrs.loadState();
 
-      const deckMap = await invoke<Record<string, number>>('deckNamesAndIds');
-      const allDecks = Object.keys(deckMap)
-        .filter((d) => d !== 'Default')
-        .sort();
-
-      decks.value = allDecks;
+      await syncDecks();
 
       const persisted = readPersistedDeck();
-      if (persisted && allDecks.includes(persisted)) {
+      if (persisted && decks.value.some(d => d.name === persisted)) {
         currentDeck.value = persisted;
       } else {
-        currentDeck.value = allDecks[0] ?? '';
+        currentDeck.value = decks.value[0]?.name ?? '';
       }
     } catch (err) {
       console.error('CardStore.init:', err);
@@ -570,12 +609,16 @@ export const useCardStore = defineStore('cardStore', () => {
   /**
    * Switches the active deck locally, clears the stale card queue, and tells
    * Anki's GUI to open the deck's review screen.
-   *
-   * AnkiConnect action: guiDeckReview
    */
-  async function selectDeck(deckName: string): Promise<boolean> {
+  async function selectDeck(deckId: number): Promise<boolean> {
+    const deck = decks.value.find(d => d.id === deckId);
+    if (!deck) return false;
+
     cardQueue.value = [];
-    currentDeck.value = deckName;
+    currentDeck.value = deck.name;
+    
+    await syncDeckCards(deckId);
+    await fillQueue(deck.name);
     return true;
   }
 
@@ -684,9 +727,12 @@ export const useCardStore = defineStore('cardStore', () => {
     cardQueue: cardQueue as Readonly<typeof cardQueue>,
     processedCards: processedCards as Readonly<typeof processedCards>,
     isFetching: isFetching as Readonly<typeof isFetching>,
+    isSyncing: isSyncing as Readonly<typeof isSyncing>,
     currentCard,
 
     init,
+    syncDecks,
+    syncDeckCards,
     fillQueue,
     resetSession,
     submitReview,

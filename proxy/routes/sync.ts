@@ -68,7 +68,8 @@ syncRouter.get('/decks', async (c) => {
       throw err;
     }
 
-    return c.json({ status: 'ok', count: Object.keys(ankiDecks).length });
+    const decks = Object.entries(ankiDecks).map(([name, id]) => ({ name, id }));
+    return c.json({ status: 'ok', count: decks.length, decks });
   } catch (error: any) {
     console.error('[Sync] GET /sync/decks failed:', error);
     return c.json({ error: error.message }, 500);

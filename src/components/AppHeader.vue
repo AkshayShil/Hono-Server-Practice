@@ -6,17 +6,19 @@ const store = useCardStore()
 
 const bufferedCount = computed(() => store.cardQueue.length)
 
+const currentDeckId = computed(() => {
+    return store.decks.find(d => d.name === store.currentDeck)?.id
+})
+
 /**
  * Writable computed so the <select> can use v-model directly.
- * The setter calls selectDeck (which clears the old queue) then
- * immediately fills the queue for the newly selected deck.
+ * The setter calls selectDeck (which clears the old queue and syncs cards)
  */
 const selectedDeck = computed({
-    get: () => store.currentDeck,
-    set: async (deckName: string) => {
-        if (!deckName || deckName === store.currentDeck) return
-        const ok = await store.selectDeck(deckName)
-        if (ok) await store.fillQueue(deckName)
+    get: () => currentDeckId.value,
+    set: async (deckId: number) => {
+        if (!deckId || deckId === currentDeckId.value) return
+        await store.selectDeck(deckId)
     },
 })
 
@@ -25,11 +27,10 @@ const openDeckModal = () => {
     if (modal) modal.showModal()
 }
 
-const handleMobileDeckSelect = async (deckName: string) => {
-    if (!deckName || deckName === store.currentDeck) return
-    const ok = await store.selectDeck(deckName)
+const handleMobileDeckSelect = async (deckId: number) => {
+    if (!deckId || deckId === currentDeckId.value) return
+    const ok = await store.selectDeck(deckId)
     if (ok) {
-        await store.fillQueue(deckName)
         const modal = document.getElementById('deck_modal') as HTMLDialogElement
         if (modal) modal.close()
     }
@@ -53,6 +54,23 @@ const handleReset = async () => {
             <h1 class="hidden sm:block text-sm font-light tracking-[0.3em] uppercase text-sakura-white/90">
                 Anki // 桜
             </h1>
+            
+            <button 
+                @click="store.syncDecks"
+                class="hidden md:flex items-center gap-1.5 text-[9px] tracking-[0.3em] uppercase text-sakura-white/40 hover:text-sakura-white transition-colors duration-300 cursor-pointer disabled:opacity-50"
+                title="Sync with Anki"
+                :disabled="store.isSyncing"
+            >
+                <svg v-if="!store.isSyncing" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 2v6h-6" />
+                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                    <path d="M3 22v-6h6" />
+                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                </svg>
+                <div v-else class="w-3 h-3 border border-sakura-white/40 border-t-sakura-white rounded-full animate-spin"></div>
+                Sync
+            </button>
+
             <button 
                 @click="openResetModal"
                 class="hidden md:flex items-center gap-1.5 text-[9px] tracking-[0.3em] uppercase text-sakura-white/40 hover:text-sakura-white transition-colors duration-300 cursor-pointer"
@@ -71,11 +89,11 @@ const handleReset = async () => {
             >
                 <option
                     v-for="deck in store.decks"
-                    :key="deck"
-                    :value="deck"
+                    :key="deck.id"
+                    :value="deck.id"
                     class="text-sakura-text bg-sakura-white"
                 >
-                    {{ deck }}
+                    {{ deck.name }}
                 </option>
             </select>
 
@@ -84,6 +102,21 @@ const handleReset = async () => {
                 @click="openDeckModal"
             >
                 {{ store.currentDeck || 'Select Deck' }}
+            </button>
+
+            <button
+                class="md:hidden bg-white/10 text-sakura-white/80 border border-white/20 p-2 hover:bg-white/20 transition-colors disabled:opacity-50"
+                @click="store.syncDecks"
+                :disabled="store.isSyncing"
+                title="Sync with Anki"
+            >
+                <svg v-if="!store.isSyncing" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 2v6h-6" />
+                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                    <path d="M3 22v-6h6" />
+                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                </svg>
+                <div v-else class="w-3.5 h-3.5 border border-sakura-white/40 border-t-sakura-white rounded-full animate-spin"></div>
             </button>
 
             <button
@@ -113,17 +146,17 @@ const handleReset = async () => {
             <div class="max-h-[60vh] overflow-y-auto">
                 <div
                     v-for="deck in store.decks"
-                    :key="deck"
+                    :key="deck.id"
                     class="p-4 cursor-pointer hover:bg-sakura-pink/10 transition-colors flex items-center justify-between group"
-                    @click="handleMobileDeckSelect(deck)"
+                    @click="handleMobileDeckSelect(deck.id)"
                 >
                     <span
                         class="text-xs uppercase tracking-widest text-sakura-text/70 group-hover:text-sakura-text font-medium"
                     >
-                        {{ deck }}
+                        {{ deck.name }}
                     </span>
                     <div
-                        v-if="deck === store.currentDeck"
+                        v-if="deck.name === store.currentDeck"
                         class="w-1.5 h-1.5 rounded-full bg-sakura-dark"
                     ></div>
                 </div>
