@@ -11,6 +11,10 @@ mkdirSync(DATA_DIR, { recursive: true });
 
 export const db = new DatabaseSync(DB_PATH);
 
+// Enable foreign key constraints and WAL journal mode
+db.exec('PRAGMA foreign_keys = ON;');
+db.exec('PRAGMA journal_mode = WAL;');
+
 export function initSchema() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS profiles (

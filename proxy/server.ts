@@ -10,6 +10,7 @@ import { ankiProxy } from './routes/ankiProxy';
 import { llmProxy } from './routes/llm';
 import { fsrsRouter } from './routes/fsrs';
 import { initSchema } from './utils/db';
+import { migrate } from './utils/migrate';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,6 +30,9 @@ export async function initLogs() {
     // Initialize SQLite database
     initSchema();
     console.log('[Server] SQLite database initialized');
+    
+    // Migrate legacy data
+    migrate();
   } catch (err) {
     console.error('[Server] Failed to initialize:', err);
   }
