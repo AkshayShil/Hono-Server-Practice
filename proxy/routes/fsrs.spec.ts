@@ -1,67 +1,62 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest'
 import { fsrsRouter } from './fsrs'
-import { readFile, writeFile, rm, mkdir } from 'fs/promises'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import { db, initSchema } from '../utils/db'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DATA_DIR = path.resolve(__dirname, '../data')
-const STATE_FILE = path.join(DATA_DIR, 'fsrs-state.json')
+describe('FSRS Server Router SQLite Tests', () => {
+  const TEST_CARD_ID = 999999
 
-describe('FSRS Server Router Stress Tests', () => {
-  beforeEach(async () => {
-    await mkdir(DATA_DIR, { recursive: true })
-    await writeFile(STATE_FILE, JSON.stringify({}))
+  beforeAll(async () => {
+    initSchema()
   })
 
-  afterEach(async () => {
-    try {
-      await rm(STATE_FILE, { force: true })
-    } catch (e) {}
+  beforeEach(async () => {
+    // 1. Ensure foreign key requirements are met
+    // Profiles
+    db.prepare("INSERT OR IGNORE INTO profiles (id, name) VALUES (1, 'Test Profile')").run()
+    // Decks
+    db.prepare("INSERT OR IGNORE INTO decks (id, profile_id, name) VALUES (1, 1, 'Test Deck')").run()
+    // Cards
+    db.prepare("INSERT OR IGNORE INTO cards (id, deck_id) VALUES (?, 1)").run(TEST_CARD_ID)
+
+    // 2. Clean up FSRS tables for a clean test state
+    db.prepare("DELETE FROM fsrs_state").run()
+    db.prepare("DELETE FROM review_history").run()
   })
 
   it('handles rapid concurrent reviews without corruption', async () => {
-    const cardId = 999
     // Simulate 20 concurrent review requests for the SAME card
-    // Note: FSRS state depends on the previous state, so concurrent updates 
-    // to the same card ID in a real world "race" would result in the last write winning.
-    // Here we test that the FILE remains valid JSON and the server doesn't crash.
+    // Since each request runs in its own transaction, they should all succeed,
+    // though the final state will depend on the last one to commit.
     const requests = Array.from({ length: 20 }).map((_, i) => 
       fsrsRouter.request('/review', {
         method: 'POST',
-        body: JSON.stringify({ cardId, rating: (i % 4) + 1 })
+        body: JSON.stringify({ cardId: TEST_CARD_ID, rating: (i % 4) + 1 })
       })
     )
 
     const responses = await Promise.all(requests)
     responses.forEach(res => expect(res.status).toBe(200))
 
-    // Verify file integrity
-    const content = await readFile(STATE_FILE, 'utf-8')
-    const state = JSON.parse(content)
-    expect(state).toHaveProperty(String(cardId))
-    expect(state[String(cardId)].reps).toBeGreaterThan(0)
+    // Verify DB integrity
+    const row = db.prepare('SELECT * FROM fsrs_state WHERE card_id = ?').get(TEST_CARD_ID) as any
+    expect(row).toBeDefined()
+    expect(row.reps).toBeGreaterThan(0)
+    
+    const history = db.prepare('SELECT count(*) as count FROM review_history WHERE card_id = ?').get(TEST_CARD_ID) as any
+    expect(history.count).toBe(20)
   })
 
-  it('properly rehydrates dates from JSON strings', async () => {
+  it('properly rehydrates dates from database strings', async () => {
     const pastDate = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
-    await writeFile(STATE_FILE, JSON.stringify({
-      "123": {
-        due: pastDate,
-        stability: 1,
-        difficulty: 1,
-        elapsed_days: 1,
-        scheduled_days: 1,
-        reps: 1,
-        lapses: 0,
-        state: 2, // Review
-        last_review: pastDate
-      }
-    }))
+    db.prepare(`
+      INSERT INTO fsrs_state (
+        card_id, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review
+      ) VALUES (?, ?, 1, 1, 1, 1, 1, 0, 2, ?)
+    `).run(TEST_CARD_ID, pastDate, pastDate)
 
     const res = await fsrsRouter.request('/review', {
       method: 'POST',
-      body: JSON.stringify({ cardId: 123, rating: 3 })
+      body: JSON.stringify({ cardId: TEST_CARD_ID, rating: 3 })
     })
 
     const data = await res.json()
@@ -70,8 +65,7 @@ describe('FSRS Server Router Stress Tests', () => {
     expect(new Date(data.card.last_review).getTime()).toBeGreaterThan(new Date(pastDate).getTime())
   })
 
-  it('returns empty object when state file is missing', async () => {
-    await rm(STATE_FILE, { force: true })
+  it('returns empty object when no state exists', async () => {
     const res = await fsrsRouter.request('/state')
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({})

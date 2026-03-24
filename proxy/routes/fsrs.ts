@@ -64,21 +64,11 @@ fsrsRouter.post('/review', async (c) => {
 
     db.exec('BEGIN TRANSACTION')
     try {
-      // Upsert fsrs_state
+      // Update fsrs_state table (using INSERT OR REPLACE)
       db.prepare(`
-        INSERT INTO fsrs_state (card_id, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(card_id) DO UPDATE SET
-          due = excluded.due,
-          stability = excluded.stability,
-          difficulty = excluded.difficulty,
-          elapsed_days = excluded.elapsed_days,
-          scheduled_days = excluded.scheduled_days,
-          reps = excluded.reps,
-          lapses = excluded.lapses,
-          state = excluded.state,
-          last_review = excluded.last_review,
-          updated_at = CURRENT_TIMESTAMP
+        INSERT OR REPLACE INTO fsrs_state (
+          card_id, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `).run(
         cardId,
         nextCard.due.toISOString(),
@@ -92,7 +82,7 @@ fsrsRouter.post('/review', async (c) => {
         nextCard.last_review?.toISOString() ?? null
       )
 
-      // Insert review_history
+      // Insert into review_history table
       db.prepare(`
         INSERT INTO review_history (id, card_id, rating, review_date, fsrs_snapshot)
         VALUES (?, ?, ?, ?, ?)
