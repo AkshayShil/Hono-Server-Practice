@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { ankiProxy } from './routes/ankiProxy';
 import { llmProxy } from './routes/llm';
 import { fsrsRouter } from './routes/fsrs';
+import { initSchema } from './utils/db';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,8 +25,12 @@ export async function initLogs() {
     console.log(`[Server] Analysis logs directory: ${logsDir}`);
     await mkdir(dataDir, { recursive: true });
     console.log(`[Server] FSRS data directory: ${dataDir}`);
+    
+    // Initialize SQLite database
+    initSchema();
+    console.log('[Server] SQLite database initialized');
   } catch (err) {
-    console.error('[Server] Failed to create directories:', err);
+    console.error('[Server] Failed to initialize:', err);
   }
 }
 
