@@ -6,9 +6,26 @@ export const useFsrsStore = defineStore('fsrs', () => {
   // Local cache of server state: cardId (as string) → FSRSCard
   const state = ref<Record<string, FSRSCard>>({})
 
+  /**
+   * Helper to rehydrate Date objects from ISO strings.
+   */
+  function rehydrateCard(card: any): FSRSCard {
+    return {
+      ...card,
+      due: new Date(card.due),
+      last_review: card.last_review ? new Date(card.last_review) : undefined,
+    }
+  }
+
   async function loadState(): Promise<void> {
     const res = await fetch('/fsrs/state')
-    state.value = await res.json()
+    const raw = await res.json() as Record<string, any>
+    const rehydrated: Record<string, FSRSCard> = {}
+    
+    for (const [id, card] of Object.entries(raw)) {
+      rehydrated[id] = rehydrateCard(card)
+    }
+    state.value = rehydrated
   }
 
   // Returns cardIds that are due NOW according to server-side state
@@ -18,7 +35,7 @@ export const useFsrsStore = defineStore('fsrs', () => {
     return allCardIds.filter((id) => {
       const card = state.value[String(id)]
       if (!card) return true // never reviewed = due immediately
-      return new Date(card.due) <= now
+      return card.due <= now
     })
   }
 
@@ -29,7 +46,7 @@ export const useFsrsStore = defineStore('fsrs', () => {
       body: JSON.stringify({ cardId, rating }),
     })
     const { card } = await res.json()
-    state.value[String(cardId)] = card
+    state.value[String(cardId)] = rehydrateCard(card)
   }
 
   // Returns FSRS state for a specific card (or null if unseen)

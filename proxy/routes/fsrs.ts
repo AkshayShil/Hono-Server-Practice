@@ -1,77 +1,118 @@
 import { Hono } from 'hono'
-import { readFile, writeFile, mkdir, rename } from 'fs/promises'
 import { createEmptyCard, fsrs, Rating, type Card as FSRSCard } from 'ts-fsrs'
-import path from 'path'
-import { fileURLToPath } from 'url'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DATA_DIR = path.resolve(__dirname, '../data')
-const STATE_FILE = path.join(DATA_DIR, 'fsrs-state.json')
-
-type StateMap = Record<string, FSRSCard>
-
-async function readState(): Promise<StateMap> {
-  try {
-    const raw = await readFile(STATE_FILE, 'utf-8')
-    return JSON.parse(raw)
-  } catch {
-    return {}
-  }
-}
-
-async function writeState(state: StateMap): Promise<void> {
-  await mkdir(DATA_DIR, { recursive: true })
-  const tmp = STATE_FILE + '.' + Math.random().toString(36).slice(2) + '.tmp'
-  
-  // Retry loop for concurrent renames
-  let attempts = 0
-  const maxAttempts = 5
-  
-  while (attempts < maxAttempts) {
-    try {
-      await writeFile(tmp, JSON.stringify(state, null, 2))
-      await rename(tmp, STATE_FILE)
-      return
-    } catch (err) {
-      attempts++
-      if (attempts >= maxAttempts) throw err
-      // Exponential backoff
-      await new Promise(resolve => setTimeout(resolve, Math.random() * 50 * attempts))
-    }
-  }
-}
+import { db } from '../utils/db'
+import crypto from 'node:crypto'
 
 export const fsrsRouter = new Hono()
 
 // GET /fsrs/state — return full state map { [cardId]: FSRSCard }
 fsrsRouter.get('/state', async (c) => {
-  const state = await readState()
-  return c.json(state)
+  try {
+    const rows = db.prepare('SELECT * FROM fsrs_state').all() as any[]
+    const state: Record<string, FSRSCard> = {}
+    
+    for (const row of rows) {
+      state[String(row.card_id)] = {
+        due: new Date(row.due),
+        stability: row.stability,
+        difficulty: row.difficulty,
+        elapsed_days: row.elapsed_days,
+        scheduled_days: row.scheduled_days,
+        reps: row.reps,
+        lapses: row.lapses,
+        state: row.state,
+        last_review: row.last_review ? new Date(row.last_review) : undefined,
+      }
+    }
+    
+    return c.json(state)
+  } catch (error: any) {
+    console.error('[FSRS] GET /state failed:', error)
+    return c.json({ error: error.message }, 500)
+  }
 })
 
 // POST /fsrs/review — { cardId: number, rating: 1|2|3|4 }
 // Returns { card: FSRSCard, log: ReviewLog }
 fsrsRouter.post('/review', async (c) => {
-  const { cardId, rating } = await c.req.json<{ cardId: number; rating: 1 | 2 | 3 | 4 }>()
-  const key = String(cardId)
-  const state = await readState()
+  try {
+    const { cardId, rating } = await c.req.json<{ cardId: number; rating: 1 | 2 | 3 | 4 }>()
+    
+    const row = db.prepare('SELECT * FROM fsrs_state WHERE card_id = ?').get(cardId) as any
+    
+    const card: FSRSCard = row
+      ? {
+          due: new Date(row.due),
+          stability: row.stability,
+          difficulty: row.difficulty,
+          elapsed_days: row.elapsed_days,
+          scheduled_days: row.scheduled_days,
+          reps: row.reps,
+          lapses: row.lapses,
+          state: row.state,
+          last_review: row.last_review ? new Date(row.last_review) : undefined,
+        }
+      : createEmptyCard()
 
-  const existing = state[key]
-  // Dates are serialised as strings — rehydrate
-  const card: FSRSCard = existing
-    ? {
-        ...existing,
-        due: new Date(existing.due),
-        last_review: existing.last_review ? new Date(existing.last_review) : undefined,
-      }
-    : createEmptyCard()
+    const ratingMap = { 1: Rating.Again, 2: Rating.Hard, 3: Rating.Good, 4: Rating.Easy }
+    const f = fsrs()
+    const now = new Date()
+    const result = f.next(card, now, ratingMap[rating])
+    
+    const nextCard = result.card
+    const reviewId = crypto.randomUUID()
 
-  const ratingMap = { 1: Rating.Again, 2: Rating.Hard, 3: Rating.Good, 4: Rating.Easy }
-  const f = fsrs()
-  const result = f.next(card, new Date(), ratingMap[rating])
+    db.exec('BEGIN TRANSACTION')
+    try {
+      // Upsert fsrs_state
+      db.prepare(`
+        INSERT INTO fsrs_state (card_id, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(card_id) DO UPDATE SET
+          due = excluded.due,
+          stability = excluded.stability,
+          difficulty = excluded.difficulty,
+          elapsed_days = excluded.elapsed_days,
+          scheduled_days = excluded.scheduled_days,
+          reps = excluded.reps,
+          lapses = excluded.lapses,
+          state = excluded.state,
+          last_review = excluded.last_review,
+          updated_at = CURRENT_TIMESTAMP
+      `).run(
+        cardId,
+        nextCard.due.toISOString(),
+        nextCard.stability,
+        nextCard.difficulty,
+        nextCard.elapsed_days,
+        nextCard.scheduled_days,
+        nextCard.reps,
+        nextCard.lapses,
+        nextCard.state,
+        nextCard.last_review?.toISOString() ?? null
+      )
 
-  state[key] = result.card
-  await writeState(state)
+      // Insert review_history
+      db.prepare(`
+        INSERT INTO review_history (id, card_id, rating, review_date, fsrs_snapshot)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        reviewId,
+        cardId,
+        rating,
+        now.toISOString(),
+        JSON.stringify(nextCard)
+      )
 
-  return c.json({ card: result.card, log: result.log })
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      throw err
+    }
+
+    return c.json({ card: nextCard, log: result.log })
+  } catch (error: any) {
+    console.error('[FSRS] POST /review failed:', error)
+    return c.json({ error: error.message }, 500)
+  }
 })
