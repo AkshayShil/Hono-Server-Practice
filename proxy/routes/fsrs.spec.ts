@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest'
 import { fsrsRouter } from './fsrs'
 import { db, initSchema } from '../utils/db'
 
+vi.mock('../utils/anki', () => ({
+  invokeAnki: vi.fn().mockResolvedValue({}),
+  queueAnkiRating: vi.fn(),
+  processAnkiSyncQueue: vi.fn(),
+}))
+
 describe('FSRS Server Router SQLite Tests', () => {
   const TEST_CARD_ID = 999999
 
@@ -15,6 +21,7 @@ describe('FSRS Server Router SQLite Tests', () => {
     db.prepare("INSERT OR IGNORE INTO profiles (id, name) VALUES (1, 'Test Profile')").run()
     // Decks
     db.prepare("INSERT OR IGNORE INTO decks (id, profile_id, name) VALUES (1, 1, 'Test Deck')").run()
+    db.prepare("INSERT OR IGNORE INTO decks (id, profile_id, name) VALUES (0, 1, 'Default Deck Placeholder')").run()
     // Cards
     db.prepare("INSERT OR IGNORE INTO cards (id, deck_id) VALUES (?, 1)").run(TEST_CARD_ID)
 
@@ -69,5 +76,28 @@ describe('FSRS Server Router SQLite Tests', () => {
     const res = await fsrsRouter.request('/state')
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({})
+  })
+
+  it('handles review for a card that does NOT exist in the cards table', async () => {
+    const UNKNOWN_CARD_ID = 888888
+    
+    // Ensure it's not in the cards table
+    db.prepare('DELETE FROM cards WHERE id = ?').run(UNKNOWN_CARD_ID)
+
+    const res = await fsrsRouter.request('/review', {
+      method: 'POST',
+      body: JSON.stringify({ cardId: UNKNOWN_CARD_ID, rating: 3 })
+    })
+
+    // This should now succeed because of the placeholder insertion
+    expect(res.status).toBe(200)
+    
+    const cardData = await res.json()
+    expect(cardData.card.reps).toBe(1)
+
+    // Verify it was actually created in the cards table with deck_id 0
+    const cardRow = db.prepare('SELECT * FROM cards WHERE id = ?').get(UNKNOWN_CARD_ID) as any
+    expect(cardRow).toBeDefined()
+    expect(cardRow.deck_id).toBe(0)
   })
 })

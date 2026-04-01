@@ -14,6 +14,12 @@ const processedCards = computed(() => [...store.processedCards])
 const hasRated = computed(() => store.processedCards.some((c) => c.rated))
 const hasAny = computed(() => store.processedCards.length > 0)
 
+const ungradedCount = computed(
+    () => store.processedCards.filter((c) => c.status === 'success' && !c.rated && c.feedback?.rating)
+        .length,
+)
+const hasUngraded = computed(() => ungradedCount.value > 0)
+
 // Live lookup — never holds a stale snapshot reference
 const selectedCardId = ref<number | null>(null)
 const selectedCard = computed<ProcessedCard | null>(() =>
@@ -96,6 +102,32 @@ function closeCard(): void {
 
         <!-- ── Controls bar ───────────────────────────────────────────── -->
         <div class="delete-bar">
+            <!-- Autograde (Magic Button) -->
+            <button
+                v-if="hasUngraded"
+                @click="store.autogradeAll()"
+                class="autograde-btn"
+                :title="`Batch-grade ${ungradedCount} cards with AI suggestions`"
+            >
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    class="w-3.5 h-3.5"
+                >
+                    <path
+                        d="M12 3l1.912 5.813L21 9l-5.813 1.912L12 21l-1.912-5.813L3 15l5.813-1.912L12 3z"
+                    />
+                    <path d="M5 3l.7 1.3L7 5l-1.3.7L5 7l-.7-1.3L3 5l1.3-.7L5 3z" />
+                    <path d="M19 19l.7 1.3L21 21l-1.3.7L19 23l-.7-1.3L17 21l1.3-.7L19 19z" />
+                </svg>
+                Autograde ({{ ungradedCount }})
+            </button>
+
+            <!-- Spacer to push clear buttons to the right -->
+            <div class="flex-1"></div>
+
             <template v-if="hasAny">
                 <button v-if="hasRated" @click="store.removeRatedCards()" class="del-btn">
                     <svg
@@ -125,28 +157,6 @@ function closeCard(): void {
                     Clear all
                 </button>
             </template>
-            <button
-                v-if="errorLog.count > 0"
-                @click="errorLog.downloadLog()"
-                class="del-btn del-btn--download"
-                :class="{ 'del-btn--has-errors': errorLog.hasErrors }"
-                :title="`${errorLog.count} reviews · ${errorLog.errorCount} errors — click to download JSON`"
-            >
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.75"
-                    class="w-3 h-3"
-                >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                {{
-                    errorLog.hasErrors ? `Log ⚠ ${errorLog.errorCount}` : `Log (${errorLog.count})`
-                }}
-            </button>
         </div>
 
         <!-- ── Card list ───────────────────────────────────────────────── -->
@@ -338,6 +348,38 @@ function closeCard(): void {
     padding: 6px 12px 8px;
     border-bottom: 1px solid rgba(244, 207, 223, 0.15);
     flex-shrink: 0;
+    flex-wrap: wrap; // Added for narrow screens
+}
+.autograde-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: white;
+    background: linear-gradient(135deg, #f4cfdf 0%, #e88fb5 100%);
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(232, 143, 181, 0.25);
+    transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    
+    svg {
+        filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.4));
+    }
+
+    &:hover {
+        transform: translateY(-1px) scale(1.02);
+        box-shadow: 0 6px 16px rgba(232, 143, 181, 0.4);
+        background: linear-gradient(135deg, #f8dce8 0%, #f1a9c8 100%);
+    }
+
+    &:active {
+        transform: translateY(0) scale(0.98);
+    }
 }
 .del-btn {
     display: flex;
@@ -636,26 +678,5 @@ function closeCard(): void {
 .flex-1::-webkit-scrollbar-thumb {
     background: rgba(179, 153, 162, 0.15);
     border-radius: 2px;
-}
-
-// ── Download button ───────────────────────────────────────────────────────
-.del-btn--download {
-    margin-left: auto;
-    color: rgba(80, 120, 200, 0.75);
-    border-color: rgba(80, 120, 200, 0.25);
-    &:hover {
-        color: rgba(60, 100, 180, 0.95);
-        border-color: rgba(80, 120, 200, 0.5);
-        background: rgba(80, 120, 200, 0.07);
-    }
-    &.del-btn--has-errors {
-        color: rgba(190, 120, 40, 0.85);
-        border-color: rgba(200, 130, 40, 0.3);
-        &:hover {
-            color: rgba(170, 100, 20, 0.95);
-            border-color: rgba(200, 130, 40, 0.55);
-            background: rgba(200, 130, 40, 0.07);
-        }
-    }
 }
 </style>

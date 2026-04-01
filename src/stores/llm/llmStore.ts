@@ -14,7 +14,7 @@ import { parseResponse } from './responseParser';
 import type { ProviderId, PromptMode, PromptTemplate, LLMFeedback, AnalyzeParams } from './types';
 
 // The base URL of our Hono proxy server
-const PROXY_BASE_URL = import.meta.env.VITE_PROXY_URL || '';
+const PROXY_BASE_URL = import.meta.env.VITE_PROXY_URL || window.location.origin;
 
 export const useLLMStore = defineStore('llm', () => {
   const _cfg = loadConfig();
@@ -133,7 +133,7 @@ export const useLLMStore = defineStore('llm', () => {
     const tmpl = PROMPT_TEMPLATES.find(t => t.id === 'clean')!;
     const userMsg = `Clean this voice transcript:\n\n${text}`;
     const raw = await callProxy({ template: tmpl, userMessage: userMsg });
-    return raw.trim();
+    return typeof raw === 'string' ? raw.trim() : '';
   }
 
   async function analyze(params: AnalyzeParams): Promise<LLMFeedback> {

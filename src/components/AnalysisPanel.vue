@@ -1,16 +1,85 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, defineComponent, h } from 'vue'
+import { marked } from 'marked'
 import type { LLMFeedback } from '@/stores/llm/'
 
 const props = defineProps<{
     feedback: LLMFeedback
 }>()
 
+/** Helper to render simple inline markdown for lists */
+function renderMd(text: string): string {
+    if (!text) return ''
+    // parseInline is faster for short strings and avoids wrapping in <p> tags
+    return marked.parseInline(text) as string
+}
+
 // Score class
 const scoreClass = computed(() => {
     if (props.feedback.score >= 80) return 'score--high'
     if (props.feedback.score >= 55) return 'score--mid'
     return 'score--low'
+})
+
+/**
+ * Sub-component to render a single gap item which might be:
+ * 1. A string: "Gap: ... | Fact: ..."
+ * 2. A JSON string: '{"gap": "...", "fact": "..."}'
+ * 3. A raw object: { gap: "...", fact: "..." }
+ */
+const GapItem = defineComponent({
+    props: {
+        item: { type: [String, Object], required: true }
+    },
+    setup(props) {
+        return () => {
+            let gapText = '';
+            let factText = '';
+
+            const it = props.item;
+
+            if (typeof it === 'string') {
+                // Try parsing as JSON first
+                if (it.trim().startsWith('{')) {
+                    try {
+                        const parsed = JSON.parse(it);
+                        gapText = parsed.gap || parsed.description || '';
+                        factText = parsed.fact || parsed.correct || '';
+                    } catch {
+                        // Not valid JSON, treat as plain string
+                        gapText = it;
+                    }
+                } else if (it.includes('|')) {
+                    // "Gap: ... | Fact: ..." format
+                    const parts = it.split('|');
+                    gapText = parts[0]!.trim();
+                    factText = parts[1]!.trim();
+                    // Clean up prefixes
+                    gapText = gapText.replace(/^(gap|omission):\s*/i, '');
+                    factText = factText.replace(/^fact:\s*/i, '');
+                } else {
+                    gapText = it;
+                }
+            } else if (typeof it === 'object' && it !== null) {
+                // Raw object (sometimes happens if JSON.parse in store didn't deep-validate)
+                const obj = it as any;
+                gapText = obj.gap || obj.description || '';
+                factText = obj.fact || obj.correct || '';
+            }
+
+            if (factText) {
+                return h('div', { class: 'gap-item' }, [
+                    h('span', { class: 'gap-desc', innerHTML: renderMd(gapText) }),
+                    h('div', { class: 'fact-bubble' }, [
+                        h('span', { class: 'fact-label' }, 'Fact: '),
+                        h('span', { class: 'fact-content', innerHTML: renderMd(factText) })
+                    ])
+                ]);
+            }
+
+            return h('span', { class: 'gap-desc', innerHTML: renderMd(gapText) });
+        }
+    }
 })
 </script>
 
@@ -50,7 +119,7 @@ const scoreClass = computed(() => {
                 What you got right
             </p>
             <ul class="detail-list">
-                <li v-for="(s, i) in feedback.strengths" :key="i">{{ s }}</li>
+                <li v-for="(s, i) in feedback.strengths" :key="i" v-html="renderMd(s)"></li>
             </ul>
         </div>
 
@@ -71,7 +140,9 @@ const scoreClass = computed(() => {
                 Gaps to fill
             </p>
             <ul class="detail-list detail-list--gap">
-                <li v-for="(g, i) in feedback.gaps" :key="i">{{ g }}</li>
+                <li v-for="(g, i) in feedback.gaps" :key="i">
+                    <GapItem :item="g" />
+                </li>
             </ul>
         </div>
 
@@ -91,7 +162,7 @@ const scoreClass = computed(() => {
                 How to improve
             </p>
             <ul class="detail-list">
-                <li v-for="(im, i) in feedback.improvements" :key="i">{{ im }}</li>
+                <li v-for="(im, i) in feedback.improvements" :key="i" v-html="renderMd(im)"></li>
             </ul>
         </div>
     </div>
@@ -263,6 +334,39 @@ const scoreClass = computed(() => {
 
     &--gap li {
         color: rgba(160, 70, 55, 0.8);
+        list-style: none;
+        padding-left: 0;
+        margin-bottom: 8px;
+    }
+}
+
+.gap-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gap-desc {
+    font-size: 15px;
+    line-height: 1.5;
+    color: rgba(160, 70, 55, 0.9);
+}
+
+.fact-bubble {
+    font-size: 14px;
+    background: rgba(255, 255, 255, 0.6);
+    padding: 6px 12px;
+    border-radius: 6px;
+    border-left: 3px solid rgba(80, 160, 100, 0.6);
+    color: rgba(44, 36, 38, 0.85);
+    line-height: 1.5;
+
+    .fact-label {
+        font-weight: 700;
+        color: #3e7b4e;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
 }
 </style>

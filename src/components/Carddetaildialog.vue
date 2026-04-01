@@ -35,7 +35,7 @@ const rating = computed(() => props.card.feedback?.rating ?? 3)
 const ratingReason = computed(() => props.card.feedback?.ratingReason ?? '')
 
 async function grade(r: number): Promise<void> {
-    await store.sendRating(props.card.cardId, r)
+    void store.sendRating(props.card.cardId, r)
     emit('close')
 }
 

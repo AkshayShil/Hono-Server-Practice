@@ -1,12 +1,12 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_OPENAI_API_KEY: string
-  readonly VITE_ANTHROPIC_API_KEY: string
-  readonly VITE_GOOGLE_API_KEY: string
-  readonly VITE_OPENROUTER_API_KEY: string
-  readonly VITE_DEEPSEEK_API_KEY: string
-  readonly VITE_OLLAMA_API_KEY: string
+  readonly OPENAI_API_KEY: string
+  readonly ANTHROPIC_API_KEY: string
+  readonly GOOGLE_API_KEY: string
+  readonly OPENROUTER_API_KEY: string
+  readonly DEEPSEEK_API_KEY: string
+  readonly OLLAMA_API_KEY: string
 }
 
 interface ImportMeta {

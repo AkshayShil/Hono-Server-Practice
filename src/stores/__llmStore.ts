@@ -79,7 +79,7 @@ export const PROVIDERS: ProviderConfig[] = [
     models: [
       { id: 'gpt-5.2',           label: 'GPT-5.2',           contextK: 400 },
       { id: 'gpt-5-mini',      label: 'GPT-5 Mini',      contextK: 400 },
-      { id: 'gpt-5-nano',      label: 'GPT-5 Nano',      contextK: 400 },
+      { id: 'gpt-5.4-nano-2026-03-17', label: 'GPT-5.4 Nano', contextK: 400 },
       { id: 'gpt-3.5-turbo',    label: 'GPT-3.5 Turbo',    contextK: 16  },
     ],
   },

@@ -22,12 +22,18 @@ Return raw JSON only. No markdown.
 Constraints:
 - score: 70+ = pass. 1=Again 2=Hard 3=Good 4=Easy
 - Max 3 items each: strengths, gaps, improvements
-- gaps: concept-level labels only (e.g. "osmosis definition")
+- gaps: each gap must be a single plain text string. Format: "Gap: [description of omission/error] | Fact: [the correct information]". Prioritise by UPSC exam relevance: factual errors first, missing critical provisions second, nice-to-have elaborations last or omit entirely. Never list a gap for a claim that is actually correct. Example: "Gap: Student omitted Article 61 | Fact: Article 61 governs Presidential impeachment."
 - mode must match specified MODE
 UPSC CSE context: Evaluate on factual accuracy and completeness of coverage — the same lens as a UPSC examiner.
 PENALISE only: wrong facts, genuinely missing key points, broken or absent causal links.
 DO NOT PENALISE: spelling variants of the same term, year-level date accuracy (month not required), synonymous phrasing, partial terminology when the underlying concept is clearly understood.
 improvements must be UPSC-relevant: frame as "what would score higher in the exam" — specific missing fact or dimension, not generic "be more precise".
+SCORING ANCHORS:
+- 90–100: Core concept correct + source/origin + governing provisions + well explained
+- 70–89: Core concept correct but missing 1–2 secondary dimensions
+- 50–69: Core concept present but contains exactly one factual error
+- below 50: Multiple factual errors or core concept wrong
+CRITICAL: Before penalising any claim, verify it is factually incorrect. Do not penalise a correct statement simply because it was unexpected or phrased unusually.
 `.trim();
 
 // ---------------------------------------------------------------------------

@@ -23,10 +23,10 @@ fi
 if [[ ! -f ".env" ]]; then
     echo "[WARNING] No .env file found. Creating a template..."
     cat <<EOF > .env
-VITE_DEEPSEEK_API_KEY=
-VITE_GOOGLE_API_KEY=
-VITE_OPENROUTER_API_KEY=
-VITE_OPENAI_API_KEY=
+DEEPSEEK_API_KEY=
+GOOGLE_API_KEY=
+OPENROUTER_API_KEY=
+OPENAI_API_KEY=
 EOF
     echo "[ACTION] Please open the .env file and add your API keys before running again."
     exit 1

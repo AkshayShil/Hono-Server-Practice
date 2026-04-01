@@ -5,6 +5,11 @@
 import type { LLMFeedback, PromptTemplate } from './types';
 
 export function parseResponse(raw: string, template: PromptTemplate): LLMFeedback {
+  if (typeof raw !== 'string') {
+    console.error('[responseParser] Expected string but got:', typeof raw, raw);
+    throw new Error('LLM returned an unexpected response format. Please try again.');
+  }
+
   if (!raw || !raw.trim()) {
     throw new Error(
       'LLM returned an empty response. ' +

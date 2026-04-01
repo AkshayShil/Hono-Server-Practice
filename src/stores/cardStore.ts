@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
+import { generateUUID } from '@/utils/uuid';
 import { useLLMStore, type LLMFeedback } from './llm/index';
 import { useErrorLogStore } from './errorLogStore';
 import { useFsrsStore } from './fsrsStore';
@@ -15,6 +16,10 @@ const QUEUE_REFILL_THRESHOLD = 5;
 const STORAGE_KEY_CURRENT_DECK = 'ankiStudy:currentDeck';
 /** localStorage key used to persist the card queue and processed history. */
 const STORAGE_KEY_STATE = 'ankiStudy:sessionState';
+/** localStorage key for current session ID. */
+const STORAGE_KEY_SESSION_ID = 'ankiStudy:sessionId';
+/** localStorage key for current session name. */
+const STORAGE_KEY_SESSION_NAME = 'ankiStudy:sessionName';
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -181,6 +186,31 @@ export const useCardStore = defineStore('cardStore', () => {
   const processedCards = ref<ProcessedCard[]>(saved?.history ?? []);
   const isFetching = ref(false);
   const isSyncing = ref(false);
+  let currentFetch: Promise<void> | null = null;
+
+  // Session state
+  const sessionId = ref<string>(localStorage.getItem(STORAGE_KEY_SESSION_ID) || generateUUID());
+  
+  const getDefaultSessionName = () => {
+    const date = new Date().toISOString().split('T')[0];
+    const deck = (currentDeck.value || 'DECK').split('::').pop()?.replace(/[^a-zA-Z0-9]/g, '_') || 'SESSION';
+    return `${date}_${deck}`;
+  };
+
+  const sessionName = ref<string>(localStorage.getItem(STORAGE_KEY_SESSION_NAME) || getDefaultSessionName());
+
+  // Watch for deck changes to update default session name if it hasn't been manually changed
+  watch(currentDeck, (newDeck) => {
+    if (!localStorage.getItem(STORAGE_KEY_SESSION_NAME)) {
+      sessionName.value = getDefaultSessionName();
+    }
+  });
+
+  // Persist session ID and name
+  if (!localStorage.getItem(STORAGE_KEY_SESSION_ID)) {
+    localStorage.setItem(STORAGE_KEY_SESSION_ID, sessionId.value);
+  }
+  watch(sessionName, (val) => localStorage.setItem(STORAGE_KEY_SESSION_NAME, val));
 
   const currentCard = computed<Card | null>(() => cardQueue.value[0] ?? null);
 
@@ -286,61 +316,67 @@ export const useCardStore = defineStore('cardStore', () => {
    */
   async function fillQueue(deckName?: string): Promise<void> {
     const targetDeck = deckName ?? currentDeck.value;
-    if (isFetching.value || !targetDeck) return;
+    if (!targetDeck) return;
+    if (currentFetch) return currentFetch;
 
-    isFetching.value = true;
-    try {
-      // Fetch ALL cards in the deck, not just those Anki thinks are due
-      const query = `deck:"${targetDeck}"`;
-      const cardIds = await invoke<number[]>('findCards', { query });
+    currentFetch = (async () => {
+      isFetching.value = true;
+      try {
+        // Fetch ALL cards in the deck, not just those Anki thinks are due
+        const query = `deck:"${targetDeck}"`;
+        const cardIds = await invoke<number[]>('findCards', { query });
 
-      if (cardIds.length === 0) return;
+        if (cardIds.length === 0) return;
 
-      const fsrsStore = useFsrsStore();
-      const dueIds = fsrsStore.getDueIds(cardIds);
+        const fsrsStore = useFsrsStore();
+        const dueIds = fsrsStore.getDueIds(cardIds);
 
-      const existingIds = new Set(cardQueue.value.map((c) => c.cardId));
-      const processedIds = new Set(processedCards.value.map((c) => c.cardId));
-      const freshIds = dueIds.filter((id) => !existingIds.has(id) && !processedIds.has(id));
+        const existingIds = new Set(cardQueue.value.map((c) => c.cardId));
+        const processedIds = new Set(processedCards.value.map((c) => c.cardId));
+        const freshIds = dueIds.filter((id) => !existingIds.has(id) && !processedIds.has(id));
 
-      if (freshIds.length === 0) return;
+        if (freshIds.length === 0) return;
 
-      const rawCards = await invoke<AnkiCardInfo[]>('cardsInfo', { cards: freshIds });
+        const rawCards = await invoke<AnkiCardInfo[]>('cardsInfo', { cards: freshIds });
 
-      console.debug('[fillQueue] cardsInfo returned', rawCards.length, 'cards');
+        console.debug('[fillQueue] cardsInfo returned', rawCards.length, 'cards');
 
-      const cards: Card[] = rawCards.map((raw) => {
-        // Fields are ordered — sort by .order and take front/back by position.
-        const ordered = Object.values(raw.fields).sort((a, b) => a.order - b.order);
-        const question = ordered[0]?.value ?? '';
-        const answer   = ordered[1]?.value ?? '';
-        
-        // Derive card type from FSRS state instead of Anki queue
-        const fsrsCard = fsrsStore.getCardState(raw.cardId);
-        const fsrsState = fsrsCard?.state ?? FSRSState.New;
-        const cardType: 'new' | 'learn' | 'review' =
-          fsrsState === FSRSState.New ? 'new'
-          : fsrsState === FSRSState.Review ? 'review'
-          : 'learn'; // Learning + Relearning both map to 'learn'
+        const cards: Card[] = rawCards.map((raw) => {
+          // Fields are ordered — sort by .order and take front/back by position.
+          const ordered = Object.values(raw.fields).sort((a, b) => a.order - b.order);
+          const question = ordered[0]?.value ?? '';
+          const answer   = ordered[1]?.value ?? '';
+          
+          // Derive card type from FSRS state instead of Anki queue
+          const fsrsCard = fsrsStore.getCardState(raw.cardId);
+          const fsrsState = fsrsCard?.state ?? FSRSState.New;
+          const cardType: 'new' | 'learn' | 'review' =
+            fsrsState === FSRSState.New ? 'new'
+            : fsrsState === FSRSState.Review ? 'review'
+            : 'learn'; // Learning + Relearning both map to 'learn'
 
-        return {
-          cardId: raw.cardId,
-          noteId: raw.note,
-          fields: raw.fields,
-          question,
-          answer,
-          cardType,
-        };
-      });
+          return {
+            cardId: raw.cardId,
+            noteId: raw.note,
+            fields: raw.fields,
+            question,
+            answer,
+            cardType,
+          };
+        });
 
-      console.debug('[fillQueue] first card question:', cards[0]?.question?.slice(0, 200));
-      cardQueue.value.push(...cards);
-    } catch (err) {
-      console.error('CardStore.fillQueue:', err);
-      throw err; // Re-throw so the UI can show an error banner.
-    } finally {
-      isFetching.value = false;
-    }
+        console.debug('[fillQueue] first card question:', cards[0]?.question?.slice(0, 200));
+        cardQueue.value.push(...cards);
+      } catch (err) {
+        console.error('CardStore.fillQueue:', err);
+        throw err; // Re-throw so the UI can show an error banner.
+      } finally {
+        isFetching.value = false;
+        currentFetch = null;
+      }
+    })();
+
+    return currentFetch;
   }
 
   /**
@@ -349,6 +385,8 @@ export const useCardStore = defineStore('cardStore', () => {
   async function resetSession(): Promise<void> {
     cardQueue.value = [];
     processedCards.value = [];
+    sessionId.value = generateUUID();
+    localStorage.setItem(STORAGE_KEY_SESSION_ID, sessionId.value);
     await fillQueue();
   }
 
@@ -367,6 +405,8 @@ export const useCardStore = defineStore('cardStore', () => {
         body: JSON.stringify({
           ...params,
           ...feedback,
+          sessionId: sessionId.value,
+          sessionName: sessionName.value,
           clientTimestamp: new Date().toISOString()
         }),
       });
@@ -477,14 +517,19 @@ export const useCardStore = defineStore('cardStore', () => {
    */
   async function sendRating(cardId: number, ease: number): Promise<void> {
     const fsrs = useFsrsStore();
-    await fsrs.submitRating(cardId, ease as 1 | 2 | 3 | 4);
 
-    // Remove card from queue (if it's still there, though submitReview usually removes it)
+    // Optimistically mark as rated and remove from queue
+    const entry = processedCards.value.find((c) => c.cardId === cardId);
+    if (entry) entry.rated = true;
+
     const index = cardQueue.value.findIndex((c) => c.cardId === cardId);
     if (index > -1) cardQueue.value.splice(index, 1);
 
-    const entry = processedCards.value.find((c) => c.cardId === cardId);
-    if (entry) entry.rated = true;
+    // Network call in background
+    void fsrs.submitRating(cardId, ease as 1 | 2 | 3 | 4).catch(err => {
+      console.error('Failed to submit rating to backend:', err);
+      // Optional: Revert UI state on failure if needed
+    });
 
     // Refill if low
     if (cardQueue.value.length < QUEUE_REFILL_THRESHOLD && currentDeck.value) {
@@ -559,6 +604,22 @@ export const useCardStore = defineStore('cardStore', () => {
         });
       }
     })();
+  }
+
+  /**
+   * Batch-processes all cards that have a suggested AI rating but haven't been rated yet.
+   */
+  async function autogradeAll(): Promise<void> {
+    const ungraded = processedCards.value.filter(
+      (c) => c.status === 'success' && !c.rated && c.feedback?.rating
+    );
+
+    if (ungraded.length === 0) return;
+
+    // Process all ungraded cards in parallel
+    await Promise.all(
+      ungraded.map((card) => sendRating(card.cardId, card.feedback!.rating))
+    );
   }
 
   /** Clears the in-session processed-cards history. */
@@ -646,11 +707,11 @@ export const useCardStore = defineStore('cardStore', () => {
   /**
    * Buries a card until tomorrow and removes it from the local queue.
    *
-   * AnkiConnect action: bury
+   * AnkiConnect action: buryCards
    */
   async function buryCard(cardId: number): Promise<boolean> {
     try {
-      await invoke<boolean>('bury', { cards: [cardId] });
+      await invoke<boolean>('buryCards', { cards: [cardId] });
       const index = cardQueue.value.findIndex((c) => c.cardId === cardId);
       if (index > -1) cardQueue.value.splice(index, 1);
       return true;
@@ -729,12 +790,15 @@ export const useCardStore = defineStore('cardStore', () => {
     isFetching: isFetching as Readonly<typeof isFetching>,
     isSyncing: isSyncing as Readonly<typeof isSyncing>,
     currentCard,
+    sessionId,
+    sessionName,
 
     init,
     syncDecks,
     syncDeckCards,
     fillQueue,
     resetSession,
+    autogradeAll,
     submitReview,
     sendRating,
     retryAnalysis,

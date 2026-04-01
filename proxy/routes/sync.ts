@@ -1,35 +1,9 @@
 import { Hono } from 'hono';
 import { db } from '../utils/db';
+import { logger } from '../utils/logger';
+import { invokeAnki } from '../utils/anki';
 
 export const syncRouter = new Hono();
-
-const ANKI_URL = 'http://127.0.0.1:8765';
-
-/**
- * Helper to call Anki-Connect.
- */
-async function invokeAnki<T>(action: string, params: any = {}): Promise<T> {
-  try {
-    const response = await fetch(ANKI_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action, version: 6, params }),
-      headers: { 'Content-Type': 'application/json' }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Anki-Connect request failed with status ${response.status}`);
-    }
-
-    const data = await response.json() as any;
-    if (data.error) {
-      throw new Error(`Anki-Connect error: ${data.error}`);
-    }
-    return data.result as T;
-  } catch (err) {
-    console.error(`[Sync] Anki-Connect invocation failed for action "${action}":`, err);
-    throw err;
-  }
-}
 
 /**
  * GET /sync/decks
@@ -47,6 +21,7 @@ syncRouter.get('/decks', async (c) => {
     // 2. Fetch decks from Anki
     // deckNamesAndIds returns { deckName: deckId, ... }
     const ankiDecks = await invokeAnki<Record<string, number>>('deckNamesAndIds');
+    logger.info(`[Sync] Fetched ${Object.keys(ankiDecks).length} decks from Anki`);
 
     // 3. Update SQLite
     const upsertDeck = db.prepare(`
@@ -71,7 +46,7 @@ syncRouter.get('/decks', async (c) => {
     const decks = Object.entries(ankiDecks).map(([name, id]) => ({ name, id }));
     return c.json({ status: 'ok', count: decks.length, decks });
   } catch (error: any) {
-    console.error('[Sync] GET /sync/decks failed:', error);
+    logger.error({ err: error }, '[Sync] GET /sync/decks failed');
     return c.json({ error: error.message }, 500);
   }
 });
@@ -87,6 +62,8 @@ syncRouter.post('/deck-cards', async (c) => {
       return c.json({ error: 'deckId is required' }, 400);
     }
 
+    logger.info(`[Sync] Syncing cards for deck ${deckId}...`);
+
     // 1. Get all card IDs from Anki for this deck
     const ankiCardIds = await invokeAnki<number[]>('findCards', { query: `did:${deckId}` });
 
@@ -95,36 +72,6 @@ syncRouter.post('/deck-cards', async (c) => {
     const existingMap = new Map(existingCards.map(c => [c.id, c.anki_mod]));
 
     // 3. Identify cards to fetch
-    // Cards that don't exist in SQLite or have different mod (we'll fetch mod from Anki for all findCards first if we wanted to be super efficient, 
-    // but cardsInfo is relatively cheap for large batches)
-    
-    // Actually, cardsInfo returns everything including 'mod'. 
-    // We could do it in two steps: 
-    // a) Get all card IDs from Anki.
-    // b) Check which ones are missing or stale in SQLite.
-    // c) Fetch cardsInfo for those.
-
-    // To know which ones are stale without fetching all cardsInfo, we'd need 'mod' from somewhere else.
-    // But Anki's findCards doesn't return mods.
-    // So we either:
-    // - Fetch ALL cardsInfo for the deck (expensive for large decks)
-    // - Or just fetch those that are missing from SQLite.
-    // - Or fetch all, but only update if mod changed.
-    
-    // The task says: "For each ID, check if it exists in SQLite and if its anki_mod matches."
-    // This implies we already know the anki_mod from Anki. 
-    // Wait, Anki-Connect's `cardsInfo` is the way to get `mod`.
-    
-    // Let's check if there's an action to get just IDs and Mods.
-    // There isn't an obvious one.
-    
-    // I'll fetch ALL cardsInfo for these IDs to get their mods and other data.
-    // If the deck is huge, this might be slow, but it's a standard approach.
-    // Actually, I can optimize:
-    // Only fetch IDs that are NOT in existingMap.
-    // But how do I know if they are modified? I need to fetch their info to see the new mod.
-    
-    // OK, let's fetch IDs in chunks if there are many.
     const CHUNK_SIZE = 500;
     const cardsToUpdate: any[] = [];
     const ankiCardIdsSet = new Set(ankiCardIds);
@@ -140,6 +87,8 @@ syncRouter.post('/deck-cards', async (c) => {
         }
       }
     }
+
+    logger.info(`[Sync] Found ${cardsToUpdate.length} cards to update for deck ${deckId}`);
 
     // 4. Update SQLite
     const upsertCard = db.prepare(`
@@ -173,15 +122,15 @@ syncRouter.post('/deck-cards', async (c) => {
       for (const card of cardsToUpdate) {
         upsertCard.run(
           card.cardId,
-          card.deckId,
-          card.modelId,
-          card.modelName,
-          card.ord,
+          deckId,
+          card.mid ?? null,
+          card.modelName ?? null,
+          card.ord ?? 0,
           JSON.stringify(card.fields),
           JSON.stringify(card.tags || []),
-          card.mod,
-          card.type,
-          card.queue
+          card.mod ?? 0,
+          card.type ?? 0,
+          card.queue ?? 0
         );
       }
 
@@ -205,6 +154,8 @@ syncRouter.post('/deck-cards', async (c) => {
       throw err;
     }
 
+    logger.info(`[Sync] Successfully synced deck ${deckId}: ${cardsToUpdate.length} updated`);
+
     return c.json({ 
       status: 'ok', 
       total: ankiCardIds.length,
@@ -213,7 +164,7 @@ syncRouter.post('/deck-cards', async (c) => {
     });
 
   } catch (error: any) {
-    console.error('[Sync] POST /sync/deck-cards failed:', error);
+    logger.error({ err: error }, '[Sync] POST /sync/deck-cards failed');
     return c.json({ error: error.message }, 500);
   }
 });

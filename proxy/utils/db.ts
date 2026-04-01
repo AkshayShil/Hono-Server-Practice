@@ -73,5 +73,14 @@ export function initSchema() {
       fsrs_snapshot TEXT, -- JSON
       FOREIGN KEY (card_id) REFERENCES cards(id)
     );
+
+    CREATE TABLE IF NOT EXISTS anki_sync_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      card_id INTEGER NOT NULL,
+      rating INTEGER NOT NULL,
+      profile_name TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      synced_at DATETIME
+    );
   `);
 }

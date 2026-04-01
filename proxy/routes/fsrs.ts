@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import { createEmptyCard, fsrs, Rating, type Card as FSRSCard } from 'ts-fsrs'
 import { db } from '../utils/db'
 import crypto from 'node:crypto'
+import { logger } from '../utils/logger'
+import { queueAnkiRating } from '../utils/anki'
 
 export const fsrsRouter = new Hono()
 
@@ -27,7 +29,7 @@ fsrsRouter.get('/state', async (c) => {
     
     return c.json(state)
   } catch (error: any) {
-    console.error('[FSRS] GET /state failed:', error)
+    logger.error({ err: error }, '[FSRS] GET /state failed')
     return c.json({ error: error.message }, 500)
   }
 })
@@ -64,6 +66,10 @@ fsrsRouter.post('/review', async (c) => {
 
     db.exec('BEGIN TRANSACTION')
     try {
+      // Ensure card exists in the cards table to satisfy foreign key constraints.
+      // Deck 0 is the "Default Deck" created during migration as a fallback.
+      db.prepare('INSERT OR IGNORE INTO cards (id, deck_id) VALUES (?, 0)').run(cardId)
+
       // Update fsrs_state table (using INSERT OR REPLACE)
       db.prepare(`
         INSERT OR REPLACE INTO fsrs_state (
@@ -100,9 +106,12 @@ fsrsRouter.post('/review', async (c) => {
       throw err
     }
 
+    // Queue for sync to Anki (handles multi-profile and offline state)
+    queueAnkiRating(cardId, rating);
+
     return c.json({ card: nextCard, log: result.log })
   } catch (error: any) {
-    console.error('[FSRS] POST /review failed:', error)
+    logger.error({ err: error }, '[FSRS] POST /review failed')
     return c.json({ error: error.message }, 500)
   }
 })

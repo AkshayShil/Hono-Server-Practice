@@ -18,11 +18,11 @@ async function start() {
   console.log(`   - Server-side logging enabled`);
   
   const keys = [
-    { name: 'OpenAI',     has: !!process.env.VITE_OPENAI_API_KEY },
-    { name: 'Anthropic',  has: !!process.env.VITE_ANTHROPIC_API_KEY },
-    { name: 'Google',     has: !!process.env.VITE_GOOGLE_API_KEY },
-    { name: 'OpenRouter', has: !!process.env.VITE_OPENROUTER_API_KEY },
-    { name: 'DeepSeek',   has: !!process.env.VITE_DEEPSEEK_API_KEY },
+    { name: 'OpenAI',     has: !!process.env.OPENAI_API_KEY },
+    { name: 'Anthropic',  has: !!process.env.ANTHROPIC_API_KEY },
+    { name: 'Google',     has: !!process.env.GOOGLE_API_KEY },
+    { name: 'OpenRouter', has: !!process.env.OPENROUTER_API_KEY },
+    { name: 'DeepSeek',   has: !!process.env.DEEPSEEK_API_KEY },
   ];
   console.log(`\x1b[35m🔑 API Keys Found:\x1b[0m`);
   keys.forEach(k => {

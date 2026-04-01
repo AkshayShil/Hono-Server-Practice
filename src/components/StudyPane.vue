@@ -1,7 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { QuillEditor } from '@vueup/vue-quill'
-import '@vueup/vue-quill/dist/vue-quill.snow.css'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { useEditor, EditorContent } from '@tiptap/vue-3'
+import { StarterKit } from '@tiptap/starter-kit'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { Placeholder } from '@tiptap/extension-placeholder'
+import { Underline } from '@tiptap/extension-underline'
+
 import { useCardStore } from '@/stores/cardStore'
 import { useLLMStore } from '@/stores/llm/llmStore'
 
@@ -14,14 +21,48 @@ const currentCard = computed(() => store.currentCard)
 
 // ---------------------------------------------------------------------------
 // Editor
-// VueQuill manages its own lifecycle — no manual onMounted/ref juggling.
-// v-model:content binds the HTML string directly.
 // ---------------------------------------------------------------------------
 
-const editorContent = ref('')
-const editorIsEmpty = computed(
-    () => editorContent.value.replace(/<[^>]*>/g, '').trim().length === 0,
-)
+const editor = useEditor({
+    extensions: [
+        StarterKit,
+        Underline,
+        Table.configure({
+            resizable: true,
+        }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        Placeholder.configure({
+            placeholder: 'Write your answer here…',
+        }),
+    ],
+    content: '',
+    editorProps: {
+        attributes: {
+            class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none min-h-[160px] lg:min-h-[400px] max-h-[60vh] overflow-y-auto p-4 lg:p-10 font-sans text-sakura-text',
+        },
+        handleKeyDown: (view, event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                submitResponse()
+                return true
+            }
+            return false
+        },
+    },
+    onFocus: () => {
+        isEditorFocused.value = true
+    },
+    onBlur: () => {
+        setTimeout(() => {
+            isEditorFocused.value = false
+        }, 100)
+    },
+})
+
+const editorIsEmpty = computed(() => {
+    return editor.value?.isEmpty ?? true
+})
 
 const analyzeTooltip = computed(() => {
     if (!currentCard.value) return 'No card loaded to analyze'
@@ -36,35 +77,25 @@ const cleanTooltip = computed(() => {
     return 'Refine voice-to-text with AI'
 })
 
-const toolbarOptions = [
-    ['bold', 'italic', 'underline'],
-    [{ list: 'ordered' }, { list: 'bullet' }],
-    [{ indent: '-1' }, { indent: '+1' }],
-    ['blockquote', 'code-block'],
-    ['clean'],
-]
+const isEditorFocused = ref(false)
 
-const quillEditorRef = ref<any>(null)
+const isStickyQuestion = computed(() => {
+    return isEditorFocused.value && currentCard.value
+})
 
 function resetEditor(): void {
-    editorContent.value = ''
-    if (quillEditorRef.value) {
-        // Force Quill to clear its internal state
-        quillEditorRef.value.setHTML('')
-    }
+    editor.value?.commands.setContent('')
     showUndo.value = false
+    isEditorFocused.value = false
     if (cleanupTimer) clearTimeout(cleanupTimer)
 }
 
 async function submitResponse(): Promise<void> {
     if (!currentCard.value || editorIsEmpty.value) return
     
-    // Capture content and reset UI immediately to allow moving to next card
-    const content = editorContent.value
+    const content = editor.value?.getHTML() || ''
     resetEditor()
 
-    // Start analysis in background - don't await the whole thing here
-    // so the button is re-enabled for the next card immediately.
     store.submitReview(content).catch(err => {
         console.error('Background analysis failed:', err)
     })
@@ -72,6 +103,10 @@ async function submitResponse(): Promise<void> {
 
 watch(currentCard, (card) => {
     if (card) resetEditor()
+})
+
+onBeforeUnmount(() => {
+    editor.value?.destroy()
 })
 
 // ---------------------------------------------------------------------------
@@ -86,14 +121,14 @@ let cleanupTimer: ReturnType<typeof setTimeout> | null = null
 async function cleanEditorText() {
     if (editorIsEmpty.value) return
     isCleaning.value = true
-    originalText.value = editorContent.value
+    originalText.value = editor.value?.getHTML() || ''
 
     if (cleanupTimer) clearTimeout(cleanupTimer)
 
     try {
         const llm = useLLMStore()
-        const cleaned = await llm.cleanText(editorContent.value.replace(/<[^>]*>/g, '').trim())
-        editorContent.value = `<p>${cleaned}</p>`
+        const cleaned = await llm.cleanText(editor.value?.getText() || '')
+        editor.value?.commands.setContent(`<p>${cleaned}</p>`)
         showUndo.value = true
         cleanupTimer = setTimeout(() => {
             showUndo.value = false
@@ -106,7 +141,7 @@ async function cleanEditorText() {
 }
 
 function undoClean() {
-    editorContent.value = originalText.value
+    editor.value?.commands.setContent(originalText.value)
     showUndo.value = false
     if (cleanupTimer) clearTimeout(cleanupTimer)
 }
@@ -160,13 +195,7 @@ async function fetchCards(): Promise<void> {
                         v-if="fetchStatus === 'fetching'"
                         class="flex items-center gap-3 px-5 py-3 border border-sakura-pink/40 bg-sakura-mist text-[13px] tracking-[0.1em] uppercase text-sakura-muted"
                     >
-                        <svg
-                            class="w-3 h-3 animate-spin shrink-0"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                        >
+                        <svg class="w-3 h-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                         </svg>
                         Fetching from « {{ store.currentDeck }} »…
@@ -176,38 +205,21 @@ async function fetchCards(): Promise<void> {
                         v-else-if="fetchStatus === 'success'"
                         class="flex items-center gap-3 px-5 py-3 border border-sakura-pink/40 bg-sakura-mist text-[13px] tracking-[0.1em] uppercase text-sakura-text"
                     >
-                        <svg
-                            class="w-3 h-3 shrink-0"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                        >
+                        <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="20 6 9 17 4 12" />
                         </svg>
                         <span v-if="fetchedCount > 0">
                             {{ fetchedCount }} card{{ fetchedCount !== 1 ? 's' : '' }} added —
                             {{ store.cardQueue.length }} total
                         </span>
-                        <span v-else
-                            >Queue up to date — {{ store.cardQueue.length }} card{{
-                                store.cardQueue.length !== 1 ? 's' : ''
-                            }}
-                            ready</span
-                        >
+                        <span v-else>Queue up to date — {{ store.cardQueue.length }} card{{ store.cardQueue.length !== 1 ? 's' : '' }} ready</span>
                     </div>
 
                     <div
                         v-else-if="fetchStatus === 'no-deck'"
                         class="flex items-center gap-3 px-5 py-3 border border-sakura-muted/30 bg-sakura-mist text-[13px] tracking-[0.1em] uppercase text-sakura-muted"
                     >
-                        <svg
-                            class="w-3 h-3 shrink-0"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                        >
+                        <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10" />
                             <line x1="12" y1="8" x2="12" y2="12" />
                             <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -219,13 +231,7 @@ async function fetchCards(): Promise<void> {
                         v-else-if="fetchStatus === 'error'"
                         class="flex items-center gap-3 px-5 py-3 border border-sakura-muted/30 bg-sakura-mist text-[13px] tracking-[0.1em] uppercase text-sakura-muted"
                     >
-                        <svg
-                            class="w-3 h-3 shrink-0"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                        >
+                        <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10" />
                             <line x1="15" y1="9" x2="9" y2="15" />
                             <line x1="9" y1="9" x2="15" y2="15" />
@@ -237,10 +243,19 @@ async function fetchCards(): Promise<void> {
         </Transition>
 
         <!-- ── Main layout ───────────────────────────────────────────────────── -->
-        <div class="flex-1 px-6 md:px-16 pt-6 pb-12 md:pb-6 flex flex-col">
-            <div class="max-w-2xl mx-auto w-full flex flex-col gap-6">
+        <div class="flex-1 px-4 md:px-16 pt-6 pb-12 md:pb-6 flex flex-col">
+            <!-- Sticky Question for Mobile -->
+            <div 
+                v-if="isStickyQuestion" 
+                class="md:hidden sticky top-0 z-20 bg-sakura-white/95 backdrop-blur-sm border-b border-sakura-pink/20 py-3 -mx-4 px-4 shadow-sm animate-fade-in"
+            >
+                <p class="text-[10px] tracking-[0.1em] uppercase text-sakura-muted/60 mb-1">Question</p>
+                <div class="text-sm line-clamp-3 italic text-sakura-text/90" v-html="currentCard?.question"></div>
+            </div>
+
+            <div class="max-w-2xl lg:max-w-5xl mx-auto w-full flex flex-col gap-6">
                 <!-- Question — only visible when a card is loaded -->
-                <div v-if="currentCard" class="animate-fade-in space-y-4">
+                <div v-if="currentCard" class="animate-fade-in space-y-4" :class="{ 'opacity-20 pointer-events-none md:opacity-100': isStickyQuestion, 'hidden md:block': isStickyQuestion }">
                     <p class="text-[13px] tracking-[0.15em] uppercase text-sakura-muted">
                         Question
                     </p>
@@ -257,28 +272,16 @@ async function fetchCards(): Promise<void> {
                         :disabled="fetchStatus === 'fetching'"
                         class="fetch-btn flex items-center gap-2 px-10 py-3"
                     >
-                        <svg
-                            class="w-3 h-3"
-                            :class="{ 'animate-spin': fetchStatus === 'fetching' }"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                        >
+                        <svg class="w-3 h-3" :class="{ 'animate-spin': fetchStatus === 'fetching' }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 4v6h6M23 20v-6h-6" />
-                            <path
-                                d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"
-                            />
+                            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
                         </svg>
                         {{ fetchStatus === 'fetching' ? 'Fetching…' : 'Fetch Cards' }}
                     </button>
                 </div>
 
-                <!-- ── Editor — always in DOM ──────────────────────────────────────
-             This section must NOT be inside a v-if. Quill mounts into
-             quillContainer on onMounted; if the div doesn't exist yet,
-             the ref will be null and Quill will never initialize.        -->
-                <div class="border-t border-sakura-pink/30 pt-8 space-y-5 mt-auto">
+                <!-- ── Tiptap Editor ────────────────────────────────────────────── -->
+                <div class="border-t border-sakura-pink/30 pt-6 md:pt-8 space-y-4 md:space-y-5 mt-auto">
                     <div class="flex items-center justify-between">
                         <p class="text-[13px] tracking-[0.15em] uppercase text-sakura-muted">
                             Your Reflection
@@ -288,18 +291,66 @@ async function fetchCards(): Promise<void> {
                         >
                     </div>
 
-                    <QuillEditor
-                        ref="quillEditorRef"
-                        :key="currentCard?.cardId ?? 'empty'"
-                        v-model:content="editorContent"
-                        content-type="html"
-                        theme="snow"
-                        placeholder="Write your answer here…"
-                        :toolbar="toolbarOptions"
-                        class="quill-sakura"
-                        @keydown.ctrl.enter="submitResponse"
-                        @keydown.meta.enter="submitResponse"
-                    />
+                    <div v-if="editor" class="tiptap-container">
+                        <!-- Toolbar -->
+                        <div class="tiptap-toolbar">
+                            <button @click="editor.chain().focus().toggleBold().run()" :class="{ 'is-active': editor.isActive('bold') }" title="Bold">
+                                <b>B</b>
+                            </button>
+                            <button @click="editor.chain().focus().toggleItalic().run()" :class="{ 'is-active': editor.isActive('italic') }" title="Italic">
+                                <i>I</i>
+                            </button>
+                            <button @click="editor.chain().focus().toggleUnderline().run()" :class="{ 'is-active': editor.isActive('underline') }" title="Underline">
+                                <u>U</u>
+                            </button>
+                            <div class="v-divider"></div>
+                            <button @click="editor.chain().focus().toggleOrderedList().run()" :class="{ 'is-active': editor.isActive('orderedList') }" title="Ordered List">
+                                1.
+                            </button>
+                            <button @click="editor.chain().focus().toggleBulletList().run()" :class="{ 'is-active': editor.isActive('bulletList') }" title="Bullet List">
+                                •
+                            </button>
+                            <button 
+                                @click="editor.chain().focus().sinkListItem('listItem').run()" 
+                                :disabled="!editor.can().sinkListItem('listItem')"
+                                title="Indent List (Tab)"
+                            >
+                                →
+                            </button>
+                            <button 
+                                @click="editor.chain().focus().liftListItem('listItem').run()" 
+                                :disabled="!editor.can().liftListItem('listItem')"
+                                title="Outdent List (Shift+Tab)"
+                            >
+                                ←
+                            </button>
+                            <button @click="editor.chain().focus().toggleBlockquote().run()" :class="{ 'is-active': editor.isActive('blockquote') }" title="Quote">
+                                “
+                            </button>
+                            <div class="v-divider"></div>
+                            <button @click="editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()" title="Insert Table">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <line x1="3" y1="9" x2="21" y2="9" />
+                                    <line x1="3" y1="15" x2="21" y2="15" />
+                                    <line x1="9" y1="3" x2="9" y2="21" />
+                                    <line x1="15" y1="3" x2="15" y2="21" />
+                                </svg>
+                            </button>
+                            <template v-if="editor.isActive('table')">
+                                <button @click="editor.chain().focus().addColumnBefore().run()" title="Add Column Before">C←</button>
+                                <button @click="editor.chain().focus().addColumnAfter().run()" title="Add Column After">C→</button>
+                                <button @click="editor.chain().focus().deleteColumn().run()" title="Delete Column">C×</button>
+                                <button @click="editor.chain().focus().addRowBefore().run()" title="Add Row Before">R↑</button>
+                                <button @click="editor.chain().focus().addRowAfter().run()" title="Add Row After">R↓</button>
+                                <button @click="editor.chain().focus().deleteRow().run()" title="Delete Row">R×</button>
+                                <button @click="editor.chain().focus().deleteTable().run()" title="Delete Table" class="text-red-400">T×</button>
+                            </template>
+                        </div>
+
+                        <!-- Editor -->
+                        <EditorContent :editor="editor" class="tiptap-content" />
+                    </div>
 
                     <div class="pt-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
                         <button
@@ -307,18 +358,9 @@ async function fetchCards(): Promise<void> {
                             :disabled="fetchStatus === 'fetching'"
                             class="fetch-btn flex items-center justify-center gap-2 px-5 py-3 md:py-2.5 w-full md:w-auto order-4 md:order-1"
                         >
-                            <svg
-                                class="w-3 h-3"
-                                :class="{ 'animate-spin': fetchStatus === 'fetching' }"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                            >
+                            <svg class="w-3 h-3" :class="{ 'animate-spin': fetchStatus === 'fetching' }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M1 4v6h6M23 20v-6h-6" />
-                                <path
-                                    d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"
-                                />
+                                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
                             </svg>
                             Fetch Cards
                         </button>
@@ -380,14 +422,8 @@ async function fetchCards(): Promise<void> {
 }
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(5px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 // ── Question text ────────────────────────────────────────────────────────
@@ -403,37 +439,14 @@ async function fetchCards(): Promise<void> {
         line-height: 1.85;
     }
 
-    p {
-        margin: 0 0 0.5em;
-        &:last-child {
-            margin-bottom: 0;
-        }
-    }
-    b,
-    strong {
-        font-weight: 700;
-    }
-    i,
-    em {
-        font-style: italic;
-    }
-    ul,
-    ol {
-        padding-left: 1.5em;
-        margin: 0.4em 0;
-    }
-    li {
-        margin: 0.25em 0;
-    }
-    img {
-        max-width: 100%;
-        height: auto;
-    }
+    p { margin: 0 0 0.5em; &:last-child { margin-bottom: 0; } }
+    b, strong { font-weight: 700; }
+    i, em { font-style: italic; }
+    ul, ol { padding-left: 1.5em; margin: 0.4em 0; }
+    li { margin: 0.25em 0; }
+    img { max-width: 100%; height: auto; }
 
-    .cloze {
-        border-bottom: 2px solid @color-accent-pink;
-        color: @color-text-muted;
-    }
+    .cloze { border-bottom: 2px solid @color-accent-pink; color: @color-text-muted; }
 }
 
 // ── Fetch button ─────────────────────────────────────────────────────────
@@ -446,74 +459,135 @@ async function fetchCards(): Promise<void> {
     transition: @transition-base;
     cursor: pointer;
 
-    &:hover:not(:disabled) {
-        border-color: #9e8289;
-        color: @color-text-dark;
-    }
-    &:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-    }
+    &:hover:not(:disabled) { border-color: #9e8289; color: @color-text-dark; }
+    &:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 
 // ── Banner transition ────────────────────────────────────────────────────
 .banner {
-    &-enter-active,
-    &-leave-active {
-        transition:
-            opacity 0.3s ease,
-            transform 0.3s ease;
-    }
-    &-enter-from,
-    &-leave-to {
-        opacity: 0;
-        transform: translateY(-4px);
-    }
+    &-enter-active, &-leave-active { transition: opacity 0.3s ease, transform 0.3s ease; }
+    &-enter-from, &-leave-to { opacity: 0; transform: translateY(-4px); }
 }
 
-// ── VueQuill / Quill (Sakura skin) ───────────────────────────────────────
-// VueQuill renders the toolbar and editor as sibling divs inside .quill-sakura.
-// We override the snow theme colours to match the sakura palette.
-:deep(.quill-sakura) {
-    box-shadow: 0 0 0 1px rgba(179, 153, 162, 0.25);
-    border-radius: 2px;
+// ── Tiptap Styles ────────────────────────────────────────────────────────
+.tiptap-container {
     background: white;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(179, 153, 162, 0.25);
+    overflow: hidden;
+}
 
-    .ql-toolbar {
-        border: none;
-        border-bottom: 1px solid rgba(179, 153, 162, 0.2);
-        background: @color-sakura-bg;
-        padding: 6px 10px;
+.tiptap-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 10px;
+    background: @color-sakura-bg;
+    border-bottom: 1px solid rgba(179, 153, 162, 0.2);
+    
+    // Mobile: Scrollable toolbar
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; // Firefox
+    &::-webkit-scrollbar { display: none; } // Chrome/Safari
 
-        button:hover,
-        button.ql-active {
-            .ql-stroke {
-                stroke: #b399a2;
-            }
-            .ql-fill {
-                fill: #b399a2;
-            }
-        }
+    @media (min-width: 768px) {
+        flex-wrap: wrap;
+        overflow-x: visible;
     }
 
-    .ql-container {
-        border: none;
-        font-size: 16px;
-        color: @color-text-dark;
+    button {
+        padding: 4px 8px;
+        font-size: 13px;
+        color: @color-text-muted;
+        border-radius: 4px;
+        transition: all 0.2s;
+        cursor: pointer;
+
+        &:hover { background: rgba(179, 153, 162, 0.1); color: @color-text-dark; }
+        &.is-active { background: rgba(179, 153, 162, 0.2); color: @color-text-dark; font-weight: 600; }
     }
 
-    .ql-editor {
-        min-height: 180px;
-        padding: 18px 22px;
-        line-height: 1.75;
-        font-size: 1.2em;
-        font-family: 'Google Sans';
+    .v-divider { width: 1px; height: 16px; background: rgba(179, 153, 162, 0.2); margin: 0 6px; }
+}
 
-        &.ql-blank::before {
+.tiptap-content {
+    :deep(.tiptap) {
+        p.is-editor-empty:first-child::before {
+            content: attr(data-placeholder);
+            float: left;
             color: rgba(179, 153, 162, 0.6);
-            font-style: normal;
+            pointer-events: none;
+            height: 0;
             font-size: 15px;
         }
+
+        min-height: 160px;
+        line-height: 1.65;
+        font-size: 1.1rem;
+        font-family: 'Inter', sans-serif;
+
+        @media (min-width: 1024px) {
+            min-height: 400px;
+            font-size: 1.25rem;
+            line-height: 1.8;
+            padding: 2.5rem !important;
+        }
+
+        ul, ol { padding-left: 1.5rem; margin: 1rem 0; }
+        ul { list-style-type: disc; }
+        ol { list-style-type: decimal; }
+        blockquote { 
+            border-left: 4px solid @color-accent-pink; 
+            padding-left: 1.5rem; 
+            color: @color-text-muted; 
+            font-style: italic; 
+            margin: 2rem 0;
+            font-size: 1.1em;
+        }
+
+        table {
+            border-collapse: collapse;
+            table-layout: fixed;
+            width: 100%;
+            margin: 1.5rem 0;
+            overflow: hidden;
+
+            td, th {
+                min-width: 1em;
+                border: 1px solid rgba(179, 153, 162, 0.4);
+                padding: 8px 12px;
+                vertical-align: top;
+                box-sizing: border-box;
+                position: relative;
+
+                > * { margin-bottom: 0; }
+            }
+
+            th { font-weight: bold; text-align: left; background-color: rgba(179, 153, 162, 0.05); }
+
+            .selectedCell:after {
+                z-index: 2;
+                position: absolute;
+                content: "";
+                left: 0; right: 0; top: 0; bottom: 0;
+                background: rgba(244, 207, 223, 0.2);
+                pointer-events: none;
+            }
+
+            .column-resize-handle {
+                position: absolute;
+                right: -2px;
+                top: 0;
+                bottom: -2px;
+                width: 4px;
+                background-color: @color-accent-pink;
+                pointer-events: none;
+            }
+        }
+
+        .tableWrapper { overflow-x: auto; }
     }
 }
 </style>

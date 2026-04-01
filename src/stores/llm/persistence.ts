@@ -9,7 +9,7 @@ const STORAGE_KEY = 'ankiStudy:llm';
 const DEFAULTS: PersistedLLMConfig = {
   providerId: 'openai',
   modelId: 'gpt-5-mini',
-  apiKey: (import.meta.env.VITE_LLM_API_KEY as string) || '',
+  apiKey: (import.meta.env.LLM_API_KEY as string) || '',
   promptMode: 'auto',
 };
 

@@ -130,8 +130,20 @@ export const useErrorLogStore = defineStore('errorLog', () => {
     'timestamp' | 'type' | 'score' | 'verdict' | 'strengths' |
     'gaps' | 'improvements' | 'rating' | 'ratingReason'>
   ): void {
-    entries.value.push({ ...entry, type: 'error', timestamp: new Date().toISOString() });
+    const fullEntry = { ...entry, type: 'error' as const, timestamp: new Date().toISOString() };
+    entries.value.push(fullEntry);
     void autoWriteIfDesktop();
+    
+    // Sync to server
+    fetch('/log-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        context: 'LLM Review Error',
+        ...fullEntry,
+        userAgent: navigator.userAgent,
+      }),
+    }).catch(err => console.error('[errorLogStore] Server sync failed:', err));
   }
 
   // Backwards-compat alias for any old callers
