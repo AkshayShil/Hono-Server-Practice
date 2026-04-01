@@ -7,10 +7,23 @@ import { queueAnkiRating } from '../utils/anki'
 
 export const fsrsRouter = new Hono()
 
+interface FsrsStateRow {
+  card_id: number;
+  due: string;
+  stability: number;
+  difficulty: number;
+  elapsed_days: number;
+  scheduled_days: number;
+  reps: number;
+  lapses: number;
+  state: number;
+  last_review: string | null;
+}
+
 // GET /fsrs/state — return full state map { [cardId]: FSRSCard }
 fsrsRouter.get('/state', async (c) => {
   try {
-    const rows = db.prepare('SELECT * FROM fsrs_state').all() as any[]
+    const rows = db.prepare('SELECT * FROM fsrs_state').all() as FsrsStateRow[]
     const state: Record<string, FSRSCard> = {}
     
     for (const row of rows) {
@@ -28,9 +41,10 @@ fsrsRouter.get('/state', async (c) => {
     }
     
     return c.json(state)
-  } catch (error: any) {
-    logger.error({ err: error }, '[FSRS] GET /state failed')
-    return c.json({ error: error.message }, 500)
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error({ err }, '[FSRS] GET /state failed')
+    return c.json({ error: err.message }, 500)
   }
 })
 
@@ -40,7 +54,7 @@ fsrsRouter.post('/review', async (c) => {
   try {
     const { cardId, rating } = await c.req.json<{ cardId: number; rating: 1 | 2 | 3 | 4 }>()
     
-    const row = db.prepare('SELECT * FROM fsrs_state WHERE card_id = ?').get(cardId) as any
+    const row = db.prepare('SELECT * FROM fsrs_state WHERE card_id = ?').get(cardId) as FsrsStateRow | undefined
     
     const card: FSRSCard = row
       ? {
@@ -110,8 +124,9 @@ fsrsRouter.post('/review', async (c) => {
     queueAnkiRating(cardId, rating);
 
     return c.json({ card: nextCard, log: result.log })
-  } catch (error: any) {
-    logger.error({ err: error }, '[FSRS] POST /review failed')
-    return c.json({ error: error.message }, 500)
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error({ err }, '[FSRS] POST /review failed')
+    return c.json({ error: err.message }, 500)
   }
 })

@@ -200,7 +200,7 @@ export const useCardStore = defineStore('cardStore', () => {
   const sessionName = ref<string>(localStorage.getItem(STORAGE_KEY_SESSION_NAME) || getDefaultSessionName());
 
   // Watch for deck changes to update default session name if it hasn't been manually changed
-  watch(currentDeck, (newDeck) => {
+  watch(currentDeck, (_newDeck) => {
     if (!localStorage.getItem(STORAGE_KEY_SESSION_NAME)) {
       sessionName.value = getDefaultSessionName();
     }

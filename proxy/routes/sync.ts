@@ -5,6 +5,18 @@ import { invokeAnki } from '../utils/anki';
 
 export const syncRouter = new Hono();
 
+interface AnkiCardInfo {
+  cardId: number;
+  mid: number;
+  modelName: string;
+  ord: number;
+  fields: Record<string, { value: string; order: number }>;
+  tags: string[];
+  mod: number;
+  type: number;
+  queue: number;
+}
+
 /**
  * GET /sync/decks
  * Fetches all deck names and IDs from Anki and updates the `decks` table.
@@ -45,9 +57,10 @@ syncRouter.get('/decks', async (c) => {
 
     const decks = Object.entries(ankiDecks).map(([name, id]) => ({ name, id }));
     return c.json({ status: 'ok', count: decks.length, decks });
-  } catch (error: any) {
-    logger.error({ err: error }, '[Sync] GET /sync/decks failed');
-    return c.json({ error: error.message }, 500);
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error({ err }, '[Sync] GET /sync/decks failed');
+    return c.json({ error: err.message }, 500);
   }
 });
 
@@ -73,12 +86,12 @@ syncRouter.post('/deck-cards', async (c) => {
 
     // 3. Identify cards to fetch
     const CHUNK_SIZE = 500;
-    const cardsToUpdate: any[] = [];
+    const cardsToUpdate: AnkiCardInfo[] = [];
     const ankiCardIdsSet = new Set(ankiCardIds);
 
     for (let i = 0; i < ankiCardIds.length; i += CHUNK_SIZE) {
       const chunk = ankiCardIds.slice(i, i + CHUNK_SIZE);
-      const info = await invokeAnki<any[]>('cardsInfo', { cards: chunk });
+      const info = await invokeAnki<AnkiCardInfo[]>('cardsInfo', { cards: chunk });
       
       for (const card of info) {
         const existingMod = existingMap.get(card.cardId);
@@ -163,8 +176,9 @@ syncRouter.post('/deck-cards', async (c) => {
       archived: existingCards.length - (existingCards.filter(c => ankiCardIdsSet.has(c.id)).length)
     });
 
-  } catch (error: any) {
-    logger.error({ err: error }, '[Sync] POST /sync/deck-cards failed');
-    return c.json({ error: error.message }, 500);
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error({ err }, '[Sync] POST /sync/deck-cards failed');
+    return c.json({ error: err.message }, 500);
   }
 });

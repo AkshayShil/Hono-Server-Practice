@@ -6,7 +6,7 @@ export const ANKI_URL = 'http://127.0.0.1:8765';
 /**
  * Helper to call Anki-Connect.
  */
-export async function invokeAnki<T>(action: string, params: any = {}): Promise<T> {
+export async function invokeAnki<T>(action: string, params: Record<string, unknown> = {}): Promise<T> {
   try {
     const response = await fetch(ANKI_URL, {
       method: 'POST',
@@ -18,11 +18,11 @@ export async function invokeAnki<T>(action: string, params: any = {}): Promise<T
       throw new Error(`Anki-Connect request failed with status ${response.status}`);
     }
 
-    const data = await response.json() as any;
+    const data = await response.json() as { result: T; error: string | null };
     if (data.error) {
       throw new Error(`Anki-Connect error: ${data.error}`);
     }
-    return data.result as T;
+    return data.result;
   } catch (err) {
     logger.error({ err, action }, `[Anki] Anki-Connect invocation failed`);
     throw err;
@@ -62,6 +62,15 @@ export function queueAnkiRating(cardId: number, rating: number) {
 
 let isSyncing = false;
 
+interface AnkiSyncQueueItem {
+  id: number;
+  card_id: number;
+  rating: number;
+  profile_name: string;
+  created_at: string;
+  synced_at: string | null;
+}
+
 /**
  * Background worker to process the sync queue.
  * Handles multiple profiles by switching profiles in Anki-Connect if needed.
@@ -71,17 +80,17 @@ export async function processAnkiSyncQueue() {
   isSyncing = true;
 
   try {
-    const pending = db.prepare('SELECT * FROM anki_sync_queue WHERE synced_at IS NULL ORDER BY created_at ASC').all() as any[];
+    const pending = db.prepare('SELECT * FROM anki_sync_queue WHERE synced_at IS NULL ORDER BY created_at ASC').all() as AnkiSyncQueueItem[];
     if (pending.length === 0) {
       isSyncing = false;
       return;
     }
 
     // Group by profile to minimize profile switching
-    const byProfile: Record<string, typeof pending> = {};
+    const byProfile: Record<string, AnkiSyncQueueItem[]> = {};
     for (const item of pending) {
       if (!byProfile[item.profile_name]) byProfile[item.profile_name] = [];
-      byProfile[item.profile_name].push(item);
+      byProfile[item.profile_name]!.push(item);
     }
 
     for (const [profileName, items] of Object.entries(byProfile)) {

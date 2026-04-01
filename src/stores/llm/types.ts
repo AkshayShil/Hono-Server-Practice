@@ -3,7 +3,11 @@
 // ---------------------------------------------------------------------------
 
 export type ProviderId = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'deepseek' | 'ollama';
-export type PromptMode = 'lenient' | 'balanced' | 'rigorous' | 'clean';
+export type PromptMode = 'lenient' | 'balanced' | 'rigorous' | 'clean' | 'format';
+
+export interface LLMFormat {
+  draft: string;
+}
 
 // ── Provider / Model ────────────────────────────────────────────────────────
 

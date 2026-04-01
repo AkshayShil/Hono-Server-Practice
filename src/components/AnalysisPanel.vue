@@ -62,9 +62,9 @@ const GapItem = defineComponent({
                 }
             } else if (typeof it === 'object' && it !== null) {
                 // Raw object (sometimes happens if JSON.parse in store didn't deep-validate)
-                const obj = it as any;
-                gapText = obj.gap || obj.description || '';
-                factText = obj.fact || obj.correct || '';
+                const obj = it as Record<string, unknown>;
+                gapText = (obj.gap as string) || (obj.description as string) || '';
+                factText = (obj.fact as string) || (obj.correct as string) || '';
             }
 
             if (factText) {

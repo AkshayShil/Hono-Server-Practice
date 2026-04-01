@@ -10,6 +10,18 @@ const DATA_DIR = path.resolve(__dirname, '../data');
 // analysis_logs is two levels up from utils
 const LOGS_DIR = path.resolve(__dirname, '../../analysis_logs');
 
+interface LegacyFsrsState {
+  due: string;
+  stability: number;
+  difficulty: number;
+  elapsed_days: number;
+  scheduled_days: number;
+  reps: number;
+  lapses: number;
+  state: number;
+  last_review?: string;
+}
+
 export function migrate() {
   console.log('[Migrate] Checking for legacy data to migrate...');
 
@@ -23,7 +35,7 @@ export function migrate() {
   const profileId = profile.id;
 
   // 2. Ensure Default Deck (id 0) exists
-  let deck = db.prepare('SELECT id FROM decks WHERE id = 0').get() as { id: number } | undefined;
+  const deck = db.prepare('SELECT id FROM decks WHERE id = 0').get() as { id: number } | undefined;
   if (!deck) {
     db.prepare('INSERT INTO decks (id, profile_id, name) VALUES (?, ?, ?)').run(0, profileId, 'Default Deck');
     console.log('[Migrate] Created Default Deck (id 0)');
@@ -44,7 +56,7 @@ export function migrate() {
       let count = 0;
       for (const [cardIdStr, state] of Object.entries(fsrsData)) {
         const cardId = parseInt(cardIdStr);
-        const s = state as any;
+        const s = state as LegacyFsrsState;
         insertCard.run(cardId, 0); // Use deck 0 as placeholder
         insertFsrs.run(
           cardId,
@@ -102,7 +114,7 @@ export function migrate() {
               JSON.stringify(log) // Snapshot the whole log entry as it contains analysis
             );
             totalReviews++;
-          } catch (lineErr) {
+          } catch {
             // Skip invalid lines
           }
         }

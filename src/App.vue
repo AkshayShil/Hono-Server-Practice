@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
-import Queuepane from '@/components/Queuepane.vue'
+import QueuePane from '@/components/QueuePane.vue'
 import SessionHistory from '@/components/SessionHistory.vue'
 import StudyPane from '@/components/StudyPane.vue'
 import { useCardStore } from '@/stores/cardStore'
@@ -84,7 +84,7 @@ onMounted(async () => {
             <!-- 25 / 50 / 25 — grid-cols-12: 3 + 6 + 3 (approx) -->
             <main class="flex-1 grid grid-cols-12 w-full overflow-hidden min-h-0">
                 <!-- Left: Queue (Hidden on mobile) -->
-                <Queuepane class="hidden md:flex md:col-span-2" />
+                <QueuePane class="hidden md:flex md:col-span-2" />
 
                 <!-- Centre: Study editor (Full width on mobile) -->
                 <StudyPane class="col-span-12 md:col-span-8" />

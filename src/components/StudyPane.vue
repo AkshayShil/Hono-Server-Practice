@@ -114,6 +114,7 @@ onBeforeUnmount(() => {
 // ---------------------------------------------------------------------------
 
 const isCleaning = ref(false)
+const isDrafting = ref(false)
 const originalText = ref('')
 const showUndo = ref(false)
 let cleanupTimer: ReturnType<typeof setTimeout> | null = null
@@ -140,7 +141,26 @@ async function cleanEditorText() {
     }
 }
 
+async function suggestFormat() {
+    if (!currentCard.value) return
+    isDrafting.value = true
+
+    try {
+        const llm = useLLMStore()
+        const draftHtml = await llm.generateFormat({
+            question: currentCard.value.question,
+            correctAnswer: currentCard.value.answer
+        })
+        editor.value?.commands.setContent(draftHtml)
+    } catch (err) {
+        console.error('Failed to generate format:', err)
+    } finally {
+        isDrafting.value = false
+    }
+}
+
 function undoClean() {
+
     editor.value?.commands.setContent(originalText.value)
     showUndo.value = false
     if (cleanupTimer) clearTimeout(cleanupTimer)
@@ -389,6 +409,14 @@ async function fetchCards(): Promise<void> {
                                 class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted/50 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
                             >
                                 {{ isCleaning ? 'Cleaning…' : 'Clean Voice Text' }}
+                            </button>
+
+                            <button
+                                @click="suggestFormat"
+                                :disabled="!currentCard || isDrafting"
+                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted/50 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
+                            >
+                                {{ isDrafting ? 'Drafting…' : 'Suggest Format' }}
                             </button>
 
                             <button

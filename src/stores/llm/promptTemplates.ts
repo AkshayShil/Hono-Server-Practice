@@ -134,4 +134,21 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
     description: 'Fixes punctuation, grammar and formatting of voice transcripts.',
     systemPrompt: 'Fix punctuation, grammar, and formatting of the transcript. Preserve meaning and terminology. Return cleaned text only.',
   },
+  {
+    id: 'format',
+    label: 'Format Generator',
+    description: 'Generates a minimal structured draft to guide student recall.',
+    systemPrompt: `Analyze the CORRECT ANSWER and generate a minimal structured draft (Markdown) for the student to fill in.
+The goal is to provide a scaffold that guides the student's recall without giving away the answers.
+Return raw JSON only: { "draft": "string (Markdown)" }
+
+Structure Choice:
+- Feel free to use a MISHMASH of formats as the answer demands: fill-in-the-blanks (____), bullet points, numbered lists, or Markdown tables.
+- Use whatever structure best captures the "shape" of the answer while requiring the student to recall the actual content.
+
+Constraints:
+- PRIORITIZE high recall: provide the least amount of structure necessary to frame the answer.
+- DO NOT include actual facts, specific names, or values from the correct answer in the draft.
+- Return the draft as Markdown.`,
+  },
 ];

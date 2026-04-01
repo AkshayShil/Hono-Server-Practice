@@ -8,15 +8,16 @@ import router from './router'
 const app = createApp(App)
 
 // Global error handler to help diagnose mobile white-screen issues
-const logToServer = async (error: any, context: string) => {
+const logToServer = async (error: Error | unknown, context: string) => {
   try {
+    const errorObj = error instanceof Error ? error : new Error(String(error));
     await fetch('/log-error', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         context,
-        message: error?.message || String(error),
-        stack: error?.stack,
+        message: errorObj.message,
+        stack: errorObj.stack,
         userAgent: navigator.userAgent,
         url: window.location.href,
         timestamp: new Date().toISOString(),

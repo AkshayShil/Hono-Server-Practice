@@ -2,13 +2,11 @@
 import { computed, ref } from 'vue'
 import { useCardStore, type ProcessedCard } from '@/stores/cardStore'
 import { useLLMStore, PROMPT_TEMPLATES, type PromptMode } from '@/stores/llm/index'
-import { useErrorLogStore } from '@/stores/errorLogStore'
-import Carddetaildialog from './Carddetaildialog.vue'
+import CardDetailDialog from './CardDetailDialog.vue'
 import LLMSettings from '@/components/LLMSettings.vue'
 
 const store = useCardStore()
 const llm = useLLMStore()
-const errorLog = useErrorLogStore()
 
 const processedCards = computed(() => [...store.processedCards])
 const hasRated = computed(() => store.processedCards.some((c) => c.rated))
@@ -258,7 +256,7 @@ function closeCard(): void {
         </div>
 
         <!-- ── Detail dialog ───────────────────────────────────────────── -->
-        <Carddetaildialog
+        <CardDetailDialog
             v-if="selectedCard !== null"
             :card="selectedCard"
             :show="selectedCardId !== null"

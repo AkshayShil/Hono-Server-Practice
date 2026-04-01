@@ -45,12 +45,12 @@ describe('FSRS Server Router SQLite Tests', () => {
     responses.forEach(res => expect(res.status).toBe(200))
 
     // Verify DB integrity
-    const row = db.prepare('SELECT * FROM fsrs_state WHERE card_id = ?').get(TEST_CARD_ID) as any
+    const row = db.prepare('SELECT * FROM fsrs_state WHERE card_id = ?').get(TEST_CARD_ID) as { reps: number } | undefined;
     expect(row).toBeDefined()
-    expect(row.reps).toBeGreaterThan(0)
+    expect(row!.reps).toBeGreaterThan(0)
     
-    const history = db.prepare('SELECT count(*) as count FROM review_history WHERE card_id = ?').get(TEST_CARD_ID) as any
-    expect(history.count).toBe(20)
+    const history = db.prepare('SELECT count(*) as count FROM review_history WHERE card_id = ?').get(TEST_CARD_ID) as { count: number } | undefined;
+    expect(history!.count).toBe(20)
   })
 
   it('properly rehydrates dates from database strings', async () => {
@@ -66,7 +66,7 @@ describe('FSRS Server Router SQLite Tests', () => {
       body: JSON.stringify({ cardId: TEST_CARD_ID, rating: 3 })
     })
 
-    const data = await res.json()
+    const data = await res.json() as { card: { reps: number; last_review: string } }
     // If rehydration failed, ts-fsrs would throw or return invalid results
     expect(data.card.reps).toBe(2)
     expect(new Date(data.card.last_review).getTime()).toBeGreaterThan(new Date(pastDate).getTime())
@@ -92,12 +92,12 @@ describe('FSRS Server Router SQLite Tests', () => {
     // This should now succeed because of the placeholder insertion
     expect(res.status).toBe(200)
     
-    const cardData = await res.json()
+    const cardData = await res.json() as { card: { reps: number } }
     expect(cardData.card.reps).toBe(1)
 
     // Verify it was actually created in the cards table with deck_id 0
-    const cardRow = db.prepare('SELECT * FROM cards WHERE id = ?').get(UNKNOWN_CARD_ID) as any
+    const cardRow = db.prepare('SELECT * FROM cards WHERE id = ?').get(UNKNOWN_CARD_ID) as { deck_id: number } | undefined;
     expect(cardRow).toBeDefined()
-    expect(cardRow.deck_id).toBe(0)
+    expect(cardRow!.deck_id).toBe(0)
   })
 })

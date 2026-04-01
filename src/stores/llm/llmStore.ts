@@ -9,7 +9,8 @@ import { ref, computed, onMounted } from 'vue';
 import { PROVIDERS }        from './apiConfig';
 import { PROMPT_TEMPLATES } from './promptTemplates';
 import { loadConfig, saveConfig } from './persistence';
-import { parseResponse } from './responseParser';
+import { parseResponse, parseFormatResponse } from './responseParser';
+import { marked } from 'marked';
 
 import type { ProviderId, PromptMode, PromptTemplate, LLMFeedback, AnalyzeParams } from './types';
 
@@ -136,6 +137,22 @@ export const useLLMStore = defineStore('llm', () => {
     return typeof raw === 'string' ? raw.trim() : '';
   }
 
+  async function generateFormat(params: { question: string; correctAnswer: string }): Promise<string> {
+    const tmpl = PROMPT_TEMPLATES.find(t => t.id === 'format')!;
+    const userMsg = [
+      `QUESTION:\n${params.question}`,
+      `CORRECT ANSWER (from card):\n${params.correctAnswer}`,
+      'Analyze the correct answer and return a minimal structured draft (Markdown). JSON format: { "draft": "string" }',
+    ].join('\n\n');
+
+    const raw = await callProxy({ template: tmpl, userMessage: userMsg });
+    const parsed = parseFormatResponse(raw);
+    
+    // Convert MD to HTML for Tiptap
+    const html = await marked.parse(parsed.draft);
+    return html;
+  }
+
   async function analyze(params: AnalyzeParams): Promise<LLMFeedback> {
     const tmpl    = resolveTemplate(params.cardType);
     const userMsg = [
@@ -155,7 +172,7 @@ export const useLLMStore = defineStore('llm', () => {
     providerId, modelId, promptMode, customBaseUrl,
     provider, models, model, template, availableProviders,
     setProvider, setModel, setPromptMode, setCustomBaseUrl,
-    resolveTemplate, analyze, cleanText,
+    resolveTemplate, analyze, cleanText, generateFormat,
     PROVIDERS, PROMPT_TEMPLATES,
   };
 });

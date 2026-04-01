@@ -8,9 +8,31 @@ const INFERENCE_DEFAULTS = {
 
 export const llmProxy = new Hono();
 
+// ── Interfaces ──────────────────────────────────────────────────────────────
+
+interface LLMModel {
+  id: string;
+  tokenParam?: string;
+  fixedSampling?: boolean;
+}
+
+interface LLMTemplate {
+  systemPrompt: string;
+}
+
+interface LLMCallParams {
+  baseUrl: string;
+  apiKey: string;
+  model: LLMModel;
+  template: LLMTemplate;
+  userMessage: string;
+  providerId?: string;
+  requiresKey?: boolean;
+}
+
 // ── Shared Helpers ──────────────────────────────────────────────────────────
 
-async function callAnthropic(params: any) {
+async function callAnthropic(params: LLMCallParams) {
   const { baseUrl, apiKey, model, template, userMessage } = params;
   const res = await fetch(`${baseUrl}/messages`, {
     method: 'POST',
@@ -29,12 +51,17 @@ async function callAnthropic(params: any) {
     }),
   });
   if (!res.ok) throw new Error(`Anthropic error ${res.status}: ${await res.text()}`);
-  const data = await res.json() as any;
-  const text = data.content?.find((b: any) => b.type === 'text')?.text;
+  
+  interface AnthropicResponse {
+    content?: Array<{ type: string; text: string }>;
+  }
+  
+  const data = await res.json() as AnthropicResponse;
+  const text = data.content?.find((b) => b.type === 'text')?.text;
   return typeof text === 'string' ? text : '';
 }
 
-async function callGoogle(params: any) {
+async function callGoogle(params: LLMCallParams) {
   const { baseUrl, apiKey, model, template, userMessage } = params;
   const url = `${baseUrl}/models/${model.id}:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
@@ -51,12 +78,21 @@ async function callGoogle(params: any) {
     }),
   });
   if (!res.ok) throw new Error(`Google error ${res.status}: ${await res.text()}`);
-  const data = await res.json() as any;
+  
+  interface GoogleResponse {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{ text: string }>;
+      };
+    }>;
+  }
+  
+  const data = await res.json() as GoogleResponse;
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   return typeof text === 'string' ? text : '';
 }
 
-async function callOpenAI(params: any) {
+async function callOpenAI(params: LLMCallParams) {
   const { baseUrl, apiKey, model, template, userMessage } = params;
   
   // 2026 Responses API (/v1/responses)
@@ -81,14 +117,26 @@ async function callOpenAI(params: any) {
 
   if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${await res.text()}`);
   
-  const data = await res.json() as any;
+  interface OpenAIResponse {
+    output?: Array<{
+      type: string;
+      message?: { content: string };
+      content?: Array<{ type: string; output_text?: string; text?: string }>;
+      text?: string;
+    }>;
+    choices?: Array<{
+      message?: { content: string };
+    }>;
+  }
+  
+  const data = await res.json() as OpenAIResponse;
   
   // 2026 Responses API: Extract text from output[i].content[j].text
   let text = '';
   if (Array.isArray(data.output)) {
     for (const item of data.output) {
       if (item.type === 'message' && Array.isArray(item.content)) {
-        const textPart = item.content.find((c: any) => c.type === 'output_text');
+        const textPart = item.content.find((c) => c.type === 'output_text');
         if (textPart?.text) {
           text = textPart.text;
           break;
@@ -107,7 +155,7 @@ async function callOpenAI(params: any) {
   return typeof text === 'string' ? text : String(text);
 }
 
-async function callOpenAICompat(params: any) {
+async function callOpenAICompat(params: LLMCallParams) {
   const { baseUrl, apiKey, model, template, userMessage, providerId, requiresKey } = params;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (apiKey && requiresKey) headers['Authorization'] = `Bearer ${apiKey}`;
@@ -131,7 +179,14 @@ async function callOpenAICompat(params: any) {
     }),
   });
   if (!res.ok) throw new Error(`${providerId} error ${res.status}: ${await res.text()}`);
-  const data = await res.json() as any;
+  
+  interface OpenAICompatResponse {
+    choices?: Array<{
+      message?: { content: string };
+    }>;
+  }
+  
+  const data = await res.json() as OpenAICompatResponse;
   const text = data.choices?.[0]?.message?.content;
   return typeof text === 'string' ? text : '';
 }
@@ -172,9 +227,10 @@ llmProxy.post('/call', async (c) => {
     }
 
     return c.json({ text: result });
-  } catch (err: any) {
-    console.error('[LLM Proxy] Call failed:', err);
-    return c.json({ error: err.message }, 500);
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('[LLM Proxy] Call failed:', error);
+    return c.json({ error: error.message }, 500);
   }
 });
 

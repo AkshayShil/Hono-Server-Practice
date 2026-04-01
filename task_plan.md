@@ -1,32 +1,29 @@
-# Task Plan - Verification of Session Reset Implementation
+# Task Plan - Fix 33 ESLint Errors
 
 ## Goal
-Verify the implementation of Task 1 (Update Card Store) and Task 2 (Add Reset Button and Dialog to AppHeader).
+Fix 33 reported ESLint errors including component renaming, unused variable removal, and replacing 'any' with appropriate types.
 
 ## Phases
-- [x] Phase 1: Research & Code Review <!-- id: 0 -->
-- [x] Phase 2: Unit Test Verification <!-- id: 1 -->
-- [x] Phase 3: UI Component Verification <!-- id: 2 -->
-- [x] Phase 4: Integration & Functional Verification <!-- id: 3 -->
-- [ ] Phase 5: Final Report <!-- id: 4 -->
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1. Research | Identify all imports for renaming and current 'any' usages | todo |
+| 2. Rename Components | Rename Carddetaildialog.vue and Queuepane.vue and update imports | todo |
+| 3. Clean up Unused | Remove 'errorLog' from SessionHistory.vue | todo |
+| 4. Fix 'any' Types | Replace 'any' in specified files | todo |
+| 5. Verification | Run ESLint to confirm all 33 errors are resolved | todo |
 
-## Phase 1: Research & Code Review
-- [x] Examine `src/stores/cardStore.ts` for `resetSession` logic.
-- [x] Examine `src/components/AppHeader.vue` for Reset button and Dialog.
-- [x] Check for Desktop and Mobile responsive design for the Reset button.
-
-## Phase 2: Unit Test Verification
-- [x] Run `npm test src/__tests__/cardStore.spec.ts`.
-- [x] Check if `resetSession` is specifically tested.
-
-## Phase 3: UI Component Verification
-- [x] Verify the presence of the Reset button in `AppHeader.vue`.
-- [x] Verify the presence and logic of the confirmation dialog.
-
-## Phase 4: Integration & Functional Verification
-- [x] Verify that clicking the Reset button triggers the confirmation dialog.
-- [x] Verify that confirming the reset calls `resetSession` in `cardStore`.
-- [x] Verify that `resetSession` correctly clears the session state.
-
-## Phase 5: Final Report
-- [ ] Document findings and confirm if all requirements are met.
+## Progress Tracking
+- [ ] Rename Carddetaildialog.vue -> CardDetailDialog.vue
+- [ ] Update imports for CardDetailDialog.vue
+- [ ] Rename Queuepane.vue -> QueuePane.vue
+- [ ] Update imports for QueuePane.vue
+- [ ] Remove unused errorLog in SessionHistory.vue
+- [ ] Fix 'any' in proxy/routes/fsrs.spec.ts
+- [ ] Fix 'any' in proxy/routes/fsrs.ts
+- [ ] Fix 'any' in proxy/routes/llm.ts
+- [ ] Fix 'any' in proxy/routes/sync.ts
+- [ ] Fix 'any' in proxy/utils/anki.ts
+- [ ] Fix 'any' in proxy/utils/migrate.ts
+- [ ] Fix 'any' in src/components/AnalysisPanel.vue
+- [ ] Fix 'any' in src/main.ts
+- [ ] Fix 'any' in src/stores/fsrsStore.ts

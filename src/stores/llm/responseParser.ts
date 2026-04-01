@@ -2,7 +2,24 @@
 // responseParser.ts — Parse and sanitise raw LLM text into LLMFeedback
 // ---------------------------------------------------------------------------
 
-import type { LLMFeedback, PromptTemplate } from './types';
+import type { LLMFeedback, LLMFormat, PromptTemplate } from './types';
+
+export function parseFormatResponse(raw: string): LLMFormat {
+  if (typeof raw !== 'string') throw new Error('Invalid format response.');
+  
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '')
+    .trim();
+
+  try {
+    const parsed = JSON.parse(cleaned) as LLMFormat;
+    if (typeof parsed.draft !== 'string') throw new Error('Invalid draft.');
+    return parsed;
+  } catch (err) {
+    throw new Error(`Failed to parse format JSON: ${(err as Error).message}`);
+  }
+}
 
 export function parseResponse(raw: string, template: PromptTemplate): LLMFeedback {
   if (typeof raw !== 'string') {

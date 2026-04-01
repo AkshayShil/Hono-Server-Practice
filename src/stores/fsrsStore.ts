@@ -9,17 +9,17 @@ export const useFsrsStore = defineStore('fsrs', () => {
   /**
    * Helper to rehydrate Date objects from ISO strings.
    */
-  function rehydrateCard(card: any): FSRSCard {
+  function rehydrateCard(card: Record<string, unknown>): FSRSCard {
     return {
       ...card,
-      due: new Date(card.due),
-      last_review: card.last_review ? new Date(card.last_review) : undefined,
-    }
+      due: new Date(card.due as string),
+      last_review: card.last_review ? new Date(card.last_review as string) : undefined,
+    } as unknown as FSRSCard
   }
 
   async function loadState(): Promise<void> {
     const res = await fetch('/fsrs/state')
-    const raw = await res.json() as Record<string, any>
+    const raw = await res.json() as Record<string, Record<string, unknown>>
     const rehydrated: Record<string, FSRSCard> = {}
     
     for (const [id, card] of Object.entries(raw)) {
