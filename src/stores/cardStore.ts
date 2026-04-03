@@ -385,8 +385,15 @@ export const useCardStore = defineStore('cardStore', () => {
   async function resetSession(): Promise<void> {
     cardQueue.value = [];
     processedCards.value = [];
+    
+    // Reset session metadata
     sessionId.value = generateUUID();
     localStorage.setItem(STORAGE_KEY_SESSION_ID, sessionId.value);
+    
+    // Reset session name to default
+    sessionName.value = getDefaultSessionName();
+    localStorage.removeItem(STORAGE_KEY_SESSION_NAME); // Allow it to be "un-set" so watch(currentDeck) can update it
+    
     await fillQueue();
   }
 
