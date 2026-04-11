@@ -11,6 +11,7 @@ const DEFAULTS: PersistedLLMConfig = {
   modelId: 'gpt-5-mini',
   apiKey: (import.meta.env.LLM_API_KEY as string) || '',
   promptMode: 'auto',
+  submissionFormat: 'text',
 };
 
 export function loadConfig(): PersistedLLMConfig {

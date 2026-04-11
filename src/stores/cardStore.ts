@@ -1,16 +1,22 @@
 import { defineStore } from 'pinia';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, shallowReactive } from 'vue';
 import { generateUUID } from '@/utils/uuid';
-import { useLLMStore, type LLMFeedback } from './llm/index';
+import { useLLMStore, type LLMFeedback, type ProviderId } from './llm/index';
 import { useErrorLogStore } from './errorLogStore';
 import { useFsrsStore } from './fsrsStore';
 import { State as FSRSState } from 'ts-fsrs';
+import TurndownService from 'turndown';
 
 /** AnkiConnect proxy endpoint handled by the Express middleman. */
 const ANKI_CONNECT_URL = '/anki';
 const ANKI_CONNECT_VERSION = 6;
 /** Minimum queue size before a refill is triggered. */
 const QUEUE_REFILL_THRESHOLD = 5;
+
+const turndown = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+});
 
 /** localStorage key used to persist the active deck across page refreshes. */
 const STORAGE_KEY_CURRENT_DECK = 'ankiStudy:currentDeck';
@@ -188,6 +194,9 @@ export const useCardStore = defineStore('cardStore', () => {
   const isSyncing = ref(false);
   let currentFetch: Promise<void> | null = null;
 
+  /** Pre-generated HTML drafts keyed by cardId. `''` = in-flight, non-empty = ready. */
+  const draftCache = shallowReactive<Record<number, string>>({});
+
   // Session state
   const sessionId = ref<string>(localStorage.getItem(STORAGE_KEY_SESSION_ID) || generateUUID());
   
@@ -235,6 +244,40 @@ export const useCardStore = defineStore('cardStore', () => {
   watch([cardQueue, processedCards], () => {
     saveSession(cardQueue.value, processedCards.value);
   }, { deep: true });
+
+  // -------------------------------------------------------------------------
+  // Auto-Draft Buffer
+  // -------------------------------------------------------------------------
+
+  /**
+   * Pre-fetches answer-format drafts for the top 2 cards in the queue.
+   * Only runs when autoDraftEnabled is true.
+   * Uses draftCache to avoid duplicate in-flight requests.
+   */
+  async function fillDraftBuffer(): Promise<void> {
+    const llm = useLLMStore();
+    if (!llm.autoDraftEnabled) return;
+
+    const toBuffer = [cardQueue.value[0], cardQueue.value[1]].filter((c): c is Card => !!c);
+    for (const card of toBuffer) {
+      if (draftCache[card.cardId] !== undefined) continue; // already cached or in-flight
+      draftCache[card.cardId] = ''; // mark in-flight
+      try {
+        const html = await llm.generateFormat({
+          question: card.question,
+          correctAnswer: card.answer,
+        });
+        draftCache[card.cardId] = html;
+      } catch (err) {
+        console.warn(`[AutoDraft] Failed to pre-draft card ${card.cardId}:`, err);
+        delete draftCache[card.cardId]; // allow retry on next queue change
+      }
+    }
+  }
+
+  // Trigger buffer when queue[0] or queue[1] changes identity.
+  watch(() => cardQueue.value[0]?.cardId, () => { void fillDraftBuffer(); }, { immediate: true });
+  watch(() => cardQueue.value[1]?.cardId, () => { void fillDraftBuffer(); });
 
   // -------------------------------------------------------------------------
   // Initialization
@@ -294,7 +337,8 @@ export const useCardStore = defineStore('cardStore', () => {
       const persisted = readPersistedDeck();
       if (persisted && decks.value.some(d => d.name === persisted)) {
         currentDeck.value = persisted;
-      } else {
+      } else if (decks.value.length > 0) {
+        // Only override the initial (persisted) value if it doesn't exist and we have alternatives
         currentDeck.value = decks.value[0]?.name ?? '';
       }
     } catch (err) {
@@ -385,6 +429,9 @@ export const useCardStore = defineStore('cardStore', () => {
   async function resetSession(): Promise<void> {
     cardQueue.value = [];
     processedCards.value = [];
+
+    // Clear the auto-draft buffer
+    for (const key in draftCache) delete draftCache[key];
     
     // Reset session metadata
     sessionId.value = generateUUID();
@@ -437,13 +484,15 @@ export const useCardStore = defineStore('cardStore', () => {
 
     const cardToAnalyze: Card = { ...currentCard.value };
 
-    // Strip HTML tags for plain-text LLM input
-    const plainText = htmlResponse.replace(/<[^>]*>/g, '').trim();
+    // Use either Turndown for Markdown or regex-strip for plain text
+    const processedAnswer = llm.submissionFormat === 'markdown' 
+      ? turndown.turndown(htmlResponse)
+      : htmlResponse.replace(/<[^>]*>/g, '').trim();
 
     const processedEntry: ProcessedCard = {
       ...cardToAnalyze,
       status: 'analyzing',
-      userResponse: plainText,
+      userResponse: processedAnswer,
       cardType: cardToAnalyze.cardType,
       rated: false,
     };
@@ -462,7 +511,7 @@ export const useCardStore = defineStore('cardStore', () => {
       const feedback = await llm.analyze({
         question:      stripHtml(cardToAnalyze.question),
         correctAnswer: stripHtml(cardToAnalyze.answer),
-        userAnswer:    plainText,
+        userAnswer:    processedAnswer,
         cardType:      cardToAnalyze.cardType,
       });
 
@@ -479,7 +528,7 @@ export const useCardStore = defineStore('cardStore', () => {
       errorLog.captureSuccess({
         cardId:          cardToAnalyze.cardId,
         question:        stripHtml(cardToAnalyze.question),
-        userAnswer:      plainText,
+        userAnswer:      processedAnswer,
         provider:        llm.provider.label,
         model:           llm.modelId,
         score:           feedback.score,
@@ -495,7 +544,7 @@ export const useCardStore = defineStore('cardStore', () => {
         cardId:     cardToAnalyze.cardId,
         question:   stripHtml(cardToAnalyze.question),
         cardAnswer: stripHtml(cardToAnalyze.answer),
-        userAnswer: plainText,
+        userAnswer: processedAnswer,
         deckName:   currentDeck.value,
       }, feedback);
     } catch (err) {
@@ -510,7 +559,7 @@ export const useCardStore = defineStore('cardStore', () => {
       errorLog.captureError({
         cardId:       cardToAnalyze.cardId,
         question:     stripHtml(cardToAnalyze.question),
-        userAnswer:   plainText,
+        userAnswer:   processedAnswer,
         errorMessage: message,
         provider:     llm.provider.label,
         model:        llm.modelId,
@@ -609,6 +658,44 @@ export const useCardStore = defineStore('cardStore', () => {
           provider:     llm.provider.label,
           model:        llm.modelId,
         });
+      }
+    })();
+  }
+
+  /**
+   * Re-runs analysis for an already-processed card using a specific model override.
+   * Used by the "Second Opinion" feature in CardDetailDialog.
+   */
+  function reanalyzeCard(cardId: number, providerIdOverride: ProviderId, modelIdOverride: string): void {
+    const entry = processedCards.value.find(c => c.cardId === cardId);
+    if (!entry || entry.status === 'analyzing') return;
+
+    const llm = useLLMStore();
+    entry.status = 'analyzing';
+    entry.llmAnalysis = undefined;
+    entry.feedback = undefined;
+
+    void (async () => {
+      try {
+        const feedback = await llm.analyze({
+          question:      stripHtml(entry.question),
+          correctAnswer: stripHtml(entry.answer),
+          userAnswer:    entry.userResponse,
+          cardType:      entry.cardType,
+          providerIdOverride,
+          modelIdOverride,
+        });
+        const e = processedCards.value.find(c => c.cardId === cardId);
+        if (e) {
+          e.status = 'success';
+          e.feedback = feedback;
+          e.llmAnalysis = feedback.verdict;
+          playAlert();
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Re-analysis failed';
+        const e = processedCards.value.find(c => c.cardId === cardId);
+        if (e) { e.status = 'error'; e.llmAnalysis = message; }
       }
     })();
   }
@@ -799,8 +886,11 @@ export const useCardStore = defineStore('cardStore', () => {
     currentCard,
     sessionId,
     sessionName,
+    draftCache,
 
     init,
+    fillDraftBuffer,
+    reanalyzeCard,
     syncDecks,
     syncDeckCards,
     fillQueue,

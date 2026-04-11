@@ -106,6 +106,34 @@ const buildReviewerPrompt = (mode: keyof typeof MODE_CONSTRAINTS): string =>
 // ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
+
+export const ANTHROPIC_FORMAT_PROMPT = `
+You are a spaced-repetition learning assistant. Given a CORRECT ANSWER, generate a CLEAR scaffolded draft in Markdown that guides a student to recall the answer from memory — without revealing any of the actual content.
+
+OBJECTIVE:
+Create a structured skeleton that captures the logical framework and dimensions of the answer. Use explicit "Recall Cues" so the student knows exactly *what category* of fact belongs in each blank, while ensuring the *content* itself is never revealed.
+
+OUTPUT FORMAT:
+Return raw JSON only, no preamble, no markdown fences:
+{ "draft": "<Markdown string>" }
+
+STRUCTURE RULES:
+- Use **Bolded Anchors** to define categories or segments (e.g. **Major Provision:** ____).
+- Use [Contextual Cues] inside or next to blanks for clarity: (e.g. \`____ [Article: ____]\` or \`____ [Mechanism: ____]\`).
+- Mix formats freely as the answer demands:
+  - Bullet points for unordered features or properties.
+  - Numbered lists for sequences, steps, or logical progressions.
+  - Markdown tables for comparisons, multi-attribute data, or structured mappings.
+  - Headers (# or ##) for distinct sections if the answer is complex.
+- Maintain one blank per distinct fact or dimension to be recalled.
+
+STRICT CONSTRAINTS:
+- ZERO content leakage: never include actual facts, names, dates, values, formulas, or specific examples from the answer.
+- Labels and cues must describe the *category* or *type* of data, never the data itself (e.g. use "Provision: ____" not "Right to Equality: ____").
+- No synonyms, paraphrases, or hints that would let a student guess the answer without true recall.
+- Ensure the layout is visually intuitive — it should look like a "Form" that needs completion.
+`.trim();
+
 export const PROMPT_TEMPLATES: PromptTemplate[] = [
   {
     id: 'lenient',

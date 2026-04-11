@@ -33,6 +33,7 @@ async function testConnection(): Promise<void> {
 }
 
 const selectedProviderConfig = computed(() => PROVIDERS.find((p) => p.id === llm.providerId))
+const analysisTemplates = computed(() => PROMPT_TEMPLATES.filter(t => ['lenient', 'balanced', 'rigorous'].includes(t.id)))
 </script>
 
 <template>
@@ -145,7 +146,7 @@ const selectedProviderConfig = computed(() => PROVIDERS.find((p) => p.id === llm
                             </button>
                             <!-- Manual modes -->
                             <button
-                                v-for="t in PROMPT_TEMPLATES"
+                                v-for="t in analysisTemplates"
                                 :key="t.id"
                                 @click="llm.setPromptMode(t.id as PromptMode)"
                                 class="prompt-btn"
@@ -158,12 +159,35 @@ const selectedProviderConfig = computed(() => PROVIDERS.find((p) => p.id === llm
 
                         <!-- Auto-trigger legend -->
                         <div v-if="llm.promptMode === 'auto'" class="auto-legend">
-                            <div v-for="t in PROMPT_TEMPLATES" :key="t.id" class="auto-legend-row">
+                            <div v-for="t in analysisTemplates" :key="t.id" class="auto-legend-row">
                                 <span class="mode-pill" :class="`mode-pill--${t.id}`">{{
                                     t.label
                                 }}</span>
                                 <span>{{ t.autoTrigger }}</span>
                             </div>
+                        </div>
+                    </section>
+
+                    <!-- ── Submission Format ─────────────────────────────────── -->
+                    <section class="settings-section">
+                        <h3 class="section-title">Submission Format</h3>
+                        <div class="format-grid">
+                            <button
+                                @click="llm.setSubmissionFormat('text')"
+                                class="format-btn"
+                                :class="{ 'format-btn--active': llm.submissionFormat === 'text' }"
+                            >
+                                <span class="format-name">Plain Text</span>
+                                <span class="format-desc">Strips all formatting (Fastest)</span>
+                            </button>
+                            <button
+                                @click="llm.setSubmissionFormat('markdown')"
+                                class="format-btn"
+                                :class="{ 'format-btn--active': llm.submissionFormat === 'markdown' }"
+                            >
+                                <span class="format-name">Markdown</span>
+                                <span class="format-desc">Preserves tables, lists, and bolding</span>
+                            </button>
                         </div>
                     </section>
 
@@ -452,13 +476,20 @@ const selectedProviderConfig = computed(() => PROVIDERS.find((p) => p.id === llm
 }
 
 // ── Prompt grid ───────────────────────────────────────────────────────────
-.prompt-grid {
+.prompt-grid, .format-grid {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.prompt-btn {
+@media (min-width: 768px) {
+    .format-grid {
+        flex-direction: row;
+        .format-btn { flex: 1; }
+    }
+}
+
+.prompt-btn, .format-btn {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -478,19 +509,19 @@ const selectedProviderConfig = computed(() => PROVIDERS.find((p) => p.id === llm
     &--active {
         border-color: rgba(244, 207, 223, 0.8);
         background: rgba(244, 207, 223, 0.2);
-        .prompt-name {
+        .prompt-name, .format-name {
             color: @text;
             font-weight: 500;
         }
     }
 }
 
-.prompt-name {
+.prompt-name, .format-name {
     font-size: 11px;
     color: @muted;
     margin-bottom: 2px;
 }
-.prompt-desc {
+.prompt-desc, .format-desc {
     font-size: 10px;
     color: rgba(179, 153, 162, 0.55);
     line-height: 1.4;

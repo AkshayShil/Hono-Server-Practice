@@ -1,29 +1,38 @@
-# Task Plan - Fix 33 ESLint Errors
+# Task Plan - Session Restart Bug, UI Cleanup, and Shortcut Key
 
 ## Goal
-Fix 33 reported ESLint errors including component renaming, unused variable removal, and replacing 'any' with appropriate types.
+Fix a session restart bug where deck details are lost, remove redundant UI text in the right pane, and add a keyboard shortcut for "Suggest Format".
 
 ## Phases
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 1. Research | Identify all imports for renaming and current 'any' usages | todo |
-| 2. Rename Components | Rename Carddetaildialog.vue and Queuepane.vue and update imports | todo |
-| 3. Clean up Unused | Remove 'errorLog' from SessionHistory.vue | todo |
-| 4. Fix 'any' Types | Replace 'any' in specified files | todo |
-| 5. Verification | Run ESLint to confirm all 33 errors are resolved | todo |
+- [x] Phase 1: Research & Reproduction (Bug & UI) `status: complete`
+- [ ] Phase 2: Implementation - Bug Fix (Deck Detail Persistence) `status: pending`
+- [ ] Phase 3: Implementation - UI Cleanup (Right Pane) `status: pending`
+- [ ] Phase 4: Implementation - Feature (Shortcut Key) `status: pending`
+- [ ] Phase 5: Verification `status: pending`
 
-## Progress Tracking
-- [ ] Rename Carddetaildialog.vue -> CardDetailDialog.vue
-- [ ] Update imports for CardDetailDialog.vue
-- [ ] Rename Queuepane.vue -> QueuePane.vue
-- [ ] Update imports for QueuePane.vue
-- [ ] Remove unused errorLog in SessionHistory.vue
-- [ ] Fix 'any' in proxy/routes/fsrs.spec.ts
-- [ ] Fix 'any' in proxy/routes/fsrs.ts
-- [ ] Fix 'any' in proxy/routes/llm.ts
-- [ ] Fix 'any' in proxy/routes/sync.ts
-- [ ] Fix 'any' in proxy/utils/anki.ts
-- [ ] Fix 'any' in proxy/utils/migrate.ts
-- [ ] Fix 'any' in src/components/AnalysisPanel.vue
-- [ ] Fix 'any' in src/main.ts
-- [ ] Fix 'any' in src/stores/fsrsStore.ts
+## Tasks
+### Phase 1: Research & Reproduction
+- [x] Investigate session restart logic in `AppHeader.vue` and `cardStore.ts`.
+- [x] Identify redundant text in `AnalysisPanel.vue` (or equivalent).
+- [x] Research keyboard shortcut implementation in the project.
+- [x] Reproduce the deck detail loss bug (mentally identified as race condition/over-aggressive clearing in `init()`).
+
+### Phase 2: Implementation - Bug Fix
+- [ ] Prevent `currentDeck` from being cleared in `cardStore.init()` if `syncDecks()` fails or returns empty.
+
+### Phase 3: Implementation - UI Cleanup
+- [ ] Filter out "clean" and "format" templates from `SessionHistory.vue` and `LLMSettings.vue`.
+
+### Phase 4: Implementation - Feature
+- [ ] Add shortcut key (e.g., `Alt+S` or `Ctrl+D`) for "Suggest Format" in `StudyPane.vue`.
+- [ ] Add tooltip hint for the shortcut key.
+
+### Phase 5: Verification
+- [ ] Verify deck selection persists after restart/refresh.
+- [ ] Verify right pane UI only shows true analysis modes (Lenient, Balanced, Rigorous).
+- [ ] Verify shortcut key triggers "Suggest Format".
+
+## Errors Encountered
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| | | |

@@ -44,6 +44,7 @@
     "pino": "^10.3.1",
     "ts-fsrs": "^5.3.1",
     "tsx": "^4.21.0",
+    "turndown": "^7.2.4",
     "vue": "^3.5.28",
     "vue-router": "^5.0.2"
   },
@@ -59,6 +60,7 @@
     "@types/jsdom": "^27.0.0",
     "@types/node": "^24.10.13",
     "@types/pino": "^7.0.5",
+    "@types/turndown": "^5.0.6",
     "@vitejs/plugin-vue": "^6.0.4",
     "@vitejs/plugin-vue-jsx": "^5.1.4",
     "@vitest/eslint-plugin": "^1.6.9",

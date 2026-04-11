@@ -7,7 +7,7 @@ import { defineStore } from 'pinia';
 import { ref, computed, onMounted } from 'vue';
 
 import { PROVIDERS }        from './apiConfig';
-import { PROMPT_TEMPLATES } from './promptTemplates';
+import { PROMPT_TEMPLATES, ANTHROPIC_FORMAT_PROMPT } from './promptTemplates';
 import { loadConfig, saveConfig } from './persistence';
 import { parseResponse, parseFormatResponse } from './responseParser';
 import { marked } from 'marked';
@@ -24,8 +24,10 @@ export const useLLMStore = defineStore('llm', () => {
   const providerId    = ref<ProviderId>(_cfg.providerId);
   const modelId       = ref<string>(_cfg.modelId);
   const promptMode    = ref<PromptMode | 'auto'>(_cfg.promptMode);
+  const submissionFormat = ref<'text' | 'markdown'>(_cfg.submissionFormat || 'text');
   const customBaseUrl = ref<string>(_cfg.customBaseUrl ?? '');
-  
+  const autoDraftEnabled = ref<boolean>(localStorage.getItem('ankiStudy:autoDraftEnabled') === 'true');
+
   // Track which providers have keys on the server
   const serverProviderStatus = ref<Array<{ id: string; hasKey: boolean }>>([]);
 
@@ -78,7 +80,12 @@ export const useLLMStore = defineStore('llm', () => {
   }
   function setModel(id: string): void            { modelId.value = id;        persist(); }
   function setPromptMode(m: PromptMode | 'auto'): void { promptMode.value = m; persist(); }
+  function setSubmissionFormat(f: 'text' | 'markdown'): void { submissionFormat.value = f; persist(); }
   function setCustomBaseUrl(url: string): void   { customBaseUrl.value = url; persist(); }
+  function setAutoDraftEnabled(val: boolean): void {
+    autoDraftEnabled.value = val;
+    localStorage.setItem('ankiStudy:autoDraftEnabled', String(val));
+  }
 
   function persist(): void {
     saveConfig({
@@ -86,6 +93,7 @@ export const useLLMStore = defineStore('llm', () => {
       modelId: modelId.value,
       apiKey: '', 
       promptMode: promptMode.value,
+      submissionFormat: submissionFormat.value,
       customBaseUrl: customBaseUrl.value,
     });
   }
@@ -107,13 +115,23 @@ export const useLLMStore = defineStore('llm', () => {
   async function callProxy(params: {
     template: PromptTemplate;
     userMessage: string;
+    providerIdOverride?: ProviderId;
+    modelIdOverride?: string;
   }): Promise<string> {
+    const effectiveProvider = params.providerIdOverride
+      ? (PROVIDERS.find(p => p.id === params.providerIdOverride) ?? provider.value)
+      : provider.value;
+
+    const effectiveModel = params.modelIdOverride
+      ? (effectiveProvider.models.find(m => m.id === params.modelIdOverride) ?? effectiveProvider.models[0]!)
+      : model.value;
+
     const res = await fetch(`${PROXY_BASE_URL}/api/llm/call`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        provider: provider.value,
-        model: model.value,
+        provider: effectiveProvider,
+        model: effectiveModel,
         template: params.template,
         userMessage: params.userMessage,
         customBaseUrl: customBaseUrl.value,
@@ -138,7 +156,14 @@ export const useLLMStore = defineStore('llm', () => {
   }
 
   async function generateFormat(params: { question: string; correctAnswer: string }): Promise<string> {
-    const tmpl = PROMPT_TEMPLATES.find(t => t.id === 'format')!;
+    const tmpl = { ...PROMPT_TEMPLATES.find(t => t.id === 'format')! };
+    
+    // If Anthropic is explicitly selected, use the optimized backup prompt.
+    // Otherwise, use the standard Gemini-optimised prompt.
+    if (providerId.value === 'anthropic') {
+      tmpl.systemPrompt = ANTHROPIC_FORMAT_PROMPT;
+    }
+
     const userMsg = [
       `QUESTION:\n${params.question}`,
       `CORRECT ANSWER (from card):\n${params.correctAnswer}`,
@@ -163,15 +188,20 @@ export const useLLMStore = defineStore('llm', () => {
       'Analyse the student\'s answer against the correct answer. Return JSON.',
     ].join('\n\n');
 
-    const raw = await callProxy({ template: tmpl, userMessage: userMsg });
+    const raw = await callProxy({ 
+      template: tmpl, 
+      userMessage: userMsg, 
+      providerIdOverride: params.providerIdOverride,
+      modelIdOverride: params.modelIdOverride 
+    });
     return parseResponse(raw, tmpl);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────
   return {
-    providerId, modelId, promptMode, customBaseUrl,
+    providerId, modelId, promptMode, submissionFormat, customBaseUrl, autoDraftEnabled,
     provider, models, model, template, availableProviders,
-    setProvider, setModel, setPromptMode, setCustomBaseUrl,
+    setProvider, setModel, setPromptMode, setSubmissionFormat, setCustomBaseUrl, setAutoDraftEnabled,
     resolveTemplate, analyze, cleanText, generateFormat,
     PROVIDERS, PROMPT_TEMPLATES,
   };

@@ -76,6 +76,9 @@ export interface AnalyzeParams {
   correctAnswer: string;
   userAnswer: string;
   cardType?: 'new' | 'learn' | 'review';
+  /** Override the active provider/model for this specific call (used by Re-analyze). */
+  providerIdOverride?: ProviderId;
+  modelIdOverride?: string;
 }
 
 // ── Persisted Config ────────────────────────────────────────────────────────
@@ -85,5 +88,6 @@ export interface PersistedLLMConfig {
   modelId: string;
   apiKey: string;
   promptMode: PromptMode | 'auto';
+  submissionFormat: 'text' | 'markdown';
   customBaseUrl?: string;
 }

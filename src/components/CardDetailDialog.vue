@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useCardStore, type ProcessedCard } from '@/stores/cardStore'
+import { useLLMStore } from '@/stores/llm/llmStore'
 import AnalysisPanel from '@/components/AnalysisPanel.vue'
 
 const props = defineProps<{
@@ -13,6 +14,7 @@ const emit = defineEmits<{
 }>()
 
 const store = useCardStore()
+const llmStore = useLLMStore()
 
 // Retry
 const isRetrying = ref(false)
@@ -21,6 +23,27 @@ async function retryAnalysis(): Promise<void> {
     isRetrying.value = true
     await store.retryAnalysis(props.card.cardId)
     isRetrying.value = false
+}
+
+// Second Opinion / Re-analyze
+const reanalyzeProviderId = ref(llmStore.providerId)
+const reanalyzeModelId = ref(llmStore.modelId)
+
+// When provider changes, reset model to the first one of that provider
+watch(reanalyzeProviderId, (newPid) => {
+    const p = llmStore.availableProviders.find(p => p.id === newPid)
+    if (p && p.models.length > 0) {
+        reanalyzeModelId.value = p.models[0]!.id
+    }
+})
+
+const currentReanalyzeModels = computed(() => {
+    const p = llmStore.availableProviders.find(p => p.id === reanalyzeProviderId.value)
+    return p ? p.models : []
+})
+
+function reanalyze(): void {
+    store.reanalyzeCard(props.card.cardId, reanalyzeProviderId.value, reanalyzeModelId.value)
 }
 
 // Rating labels and their meanings
@@ -146,6 +169,26 @@ function keepAndClose(): void {
                                 {{ isRetrying ? 'Retrying…' : 'Retry Analysis' }}
                             </button>
                         </div>
+
+                        <!-- ── Second Opinion ────────────────────────────────────────── -->
+                        <section v-if="card.status === 'success'" class="section second-opinion-section">
+                            <p class="section-label">Second Opinion</p>
+                            <div class="second-opinion-row">
+                                <select v-model="reanalyzeProviderId" class="model-select">
+                                    <option v-for="p in llmStore.availableProviders" :key="p.id" :value="p.id">
+                                        {{ p.label }}
+                                    </option>
+                                </select>
+                                <select v-model="reanalyzeModelId" class="model-select">
+                                    <option v-for="m in currentReanalyzeModels" :key="m.id" :value="m.id">
+                                        {{ m.label }}
+                                    </option>
+                                </select>
+                                <button @click="reanalyze" class="reanalyze-btn">
+                                    Re-analyze
+                                </button>
+                            </div>
+                        </section>
 
                         <!-- ── Rating section ─────────────────────────────────────── -->
                         <section v-if="!card.rated" class="section rating-section">
@@ -687,6 +730,57 @@ function keepAndClose(): void {
         color: @muted;
     }
 }
+// ── Second Opinion ────────────────────────────────────────────────────────
+.second-opinion-section {
+    gap: 8px;
+}
+
+.second-opinion-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.model-select {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 207, 223, 0.4);
+    background: rgba(255, 255, 255, 0.6);
+    font-size: 11px;
+    color: @text;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    transition: border-color 0.2s;
+
+    &:focus {
+        border-color: rgba(244, 207, 223, 0.9);
+    }
+}
+
+.reanalyze-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    border: 1px solid rgba(244, 207, 223, 0.5);
+    background: rgba(244, 207, 223, 0.15);
+    color: @muted;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+
+    &:hover {
+        background: rgba(244, 207, 223, 0.35);
+        border-color: rgba(244, 207, 223, 0.8);
+        color: @text;
+    }
+}
+
 // ── Retry button ──────────────────────────────────────────────────────────
 .error-block {
     display: flex;

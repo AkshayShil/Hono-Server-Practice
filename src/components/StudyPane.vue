@@ -17,6 +17,7 @@ import { useLLMStore } from '@/stores/llm/llmStore'
 // ---------------------------------------------------------------------------
 
 const store = useCardStore()
+const llmStore = useLLMStore()
 const currentCard = computed(() => store.currentCard)
 
 // ---------------------------------------------------------------------------
@@ -47,6 +48,10 @@ const editor = useEditor({
                 submitResponse()
                 return true
             }
+            if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
+                suggestFormat()
+                return true
+            }
             return false
         },
     },
@@ -68,6 +73,12 @@ const analyzeTooltip = computed(() => {
     if (!currentCard.value) return 'No card loaded to analyze'
     if (editorIsEmpty.value) return 'Please enter your reflection first'
     return 'Analyze your reflection (⌘↵)'
+})
+
+const suggestTooltip = computed(() => {
+    if (!currentCard.value) return 'No card loaded'
+    if (isDrafting.value) return 'Generating draft...'
+    return 'Suggest a structured format (⌘D)'
 })
 
 const cleanTooltip = computed(() => {
@@ -102,8 +113,36 @@ async function submitResponse(): Promise<void> {
 }
 
 watch(currentCard, (card) => {
-    if (card) resetEditor()
+    if (!card) return
+    resetEditor()
+    // Apply pre-fetched draft immediately if available
+    if (llmStore.autoDraftEnabled) {
+        const draft = store.draftCache[card.cardId]
+        if (draft) editor.value?.commands.setContent(draft)
+    }
 })
+
+// Apply draft when it arrives late (buffered after card became current)
+watch(
+    () => currentCard.value ? store.draftCache[currentCard.value.cardId] : null,
+    (draft) => {
+        if (!draft || !currentCard.value || !llmStore.autoDraftEnabled) return
+        if (!editor.value?.isEmpty) return // don't overwrite user content
+        editor.value?.commands.setContent(draft)
+    }
+)
+
+function toggleAutoDraft(): void {
+    llmStore.setAutoDraftEnabled(!llmStore.autoDraftEnabled)
+    if (llmStore.autoDraftEnabled) {
+        void store.fillDraftBuffer()
+        // Apply to current card if a draft is already cached
+        if (currentCard.value) {
+            const draft = store.draftCache[currentCard.value.cardId]
+            if (draft && editor.value?.isEmpty) editor.value?.commands.setContent(draft)
+        }
+    }
+}
 
 onBeforeUnmount(() => {
     editor.value?.destroy()
@@ -127,8 +166,7 @@ async function cleanEditorText() {
     if (cleanupTimer) clearTimeout(cleanupTimer)
 
     try {
-        const llm = useLLMStore()
-        const cleaned = await llm.cleanText(editor.value?.getText() || '')
+        const cleaned = await llmStore.cleanText(editor.value?.getText() || '')
         editor.value?.commands.setContent(`<p>${cleaned}</p>`)
         showUndo.value = true
         cleanupTimer = setTimeout(() => {
@@ -146,8 +184,7 @@ async function suggestFormat() {
     isDrafting.value = true
 
     try {
-        const llm = useLLMStore()
-        const draftHtml = await llm.generateFormat({
+        const draftHtml = await llmStore.generateFormat({
             question: currentCard.value.question,
             correctAnswer: currentCard.value.answer
         })
@@ -306,9 +343,16 @@ async function fetchCards(): Promise<void> {
                         <p class="text-[13px] tracking-[0.15em] uppercase text-sakura-muted">
                             Your Reflection
                         </p>
-                        <span class="text-[12px] uppercase tracking-wider text-sakura-muted/60"
-                            >⌘↵ to Analyze</span
-                        >
+                        <div class="flex items-center gap-3">
+                            <span class="text-[12px] uppercase tracking-wider text-sakura-muted/60">⌘↵ to Analyze</span>
+                            <button
+                                @click="resetEditor"
+                                :disabled="editorIsEmpty"
+                                class="px-3 py-1 text-[11px] tracking-[0.1em] uppercase border border-sakura-muted/30 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 cursor-pointer"
+                            >
+                                Reset
+                            </button>
+                        </div>
                     </div>
 
                     <div v-if="editor" class="tiptap-container">
@@ -357,6 +401,13 @@ async function fetchCards(): Promise<void> {
                                     <line x1="15" y1="3" x2="15" y2="21" />
                                 </svg>
                             </button>
+                            <div class="v-divider"></div>
+                            <button
+                                @click="toggleAutoDraft"
+                                :class="{ 'auto-draft-armed': llmStore.autoDraftEnabled }"
+                                :title="llmStore.autoDraftEnabled ? 'Auto-Draft: Armed — click to disarm' : 'Auto-Draft: Off — click to arm'"
+                                class="auto-draft-btn"
+                            >✨</button>
                             <template v-if="editor.isActive('table')">
                                 <button @click="editor.chain().focus().addColumnBefore().run()" title="Add Column Before">C←</button>
                                 <button @click="editor.chain().focus().addColumnAfter().run()" title="Add Column After">C→</button>
@@ -372,62 +423,40 @@ async function fetchCards(): Promise<void> {
                         <EditorContent :editor="editor" class="tiptap-content" />
                     </div>
 
-                    <div class="pt-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                    <div class="pt-5 flex flex-col md:flex-row items-stretch md:items-center justify-end gap-3 md:gap-4">
                         <button
-                            @click="fetchCards"
-                            :disabled="fetchStatus === 'fetching'"
-                            class="fetch-btn flex items-center justify-center gap-2 px-5 py-3 md:py-2.5 w-full md:w-auto order-4 md:order-1"
+                            v-if="showUndo"
+                            @click="undoClean"
+                            class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-pink bg-sakura-pink/10 text-sakura-text hover:bg-sakura-pink transition-all duration-500 cursor-pointer w-full md:w-auto"
                         >
-                            <svg class="w-3 h-3" :class="{ 'animate-spin': fetchStatus === 'fetching' }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M1 4v6h6M23 20v-6h-6" />
-                                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
-                            </svg>
-                            Fetch Cards
+                            Undo Clean
+                        </button>
+                        <button
+                            v-else
+                            @click="cleanEditorText"
+                            :disabled="editorIsEmpty || !currentCard || isCleaning"
+                            :title="cleanTooltip"
+                            class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted/50 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
+                        >
+                            {{ isCleaning ? 'Cleaning…' : 'Clean Voice Text' }}
                         </button>
 
-                        <div class="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 w-full md:w-auto order-1 md:order-2">
-                            <button
-                                @click="resetEditor"
-                                :disabled="editorIsEmpty"
-                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted/30 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
-                            >
-                                Reset
-                            </button>
-
-                            <button
-                                v-if="showUndo"
-                                @click="undoClean"
-                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-pink bg-sakura-pink/10 text-sakura-text hover:bg-sakura-pink transition-all duration-500 cursor-pointer w-full md:w-auto"
-                            >
-                                Undo Clean
-                            </button>
-                            <button
-                                v-else
-                                @click="cleanEditorText"
-                                :disabled="editorIsEmpty || !currentCard || isCleaning"
-                                :title="cleanTooltip"
-                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted/50 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
-                            >
-                                {{ isCleaning ? 'Cleaning…' : 'Clean Voice Text' }}
-                            </button>
-
-                            <button
-                                @click="suggestFormat"
-                                :disabled="!currentCard || isDrafting"
-                                class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted/50 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
-                            >
-                                {{ isDrafting ? 'Drafting…' : 'Suggest Format' }}
-                            </button>
-
-                            <button
-                                @click="submitResponse"
-                                :disabled="editorIsEmpty || !currentCard"
-                                :title="analyzeTooltip"
-                                class="px-10 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted text-sakura-muted hover:bg-sakura-pink hover:border-sakura-pink hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
-                            >
-                                Analyze
-                            </button>
-                        </div>
+                        <button
+                            @click="suggestFormat"
+                            :disabled="!currentCard || isDrafting"
+                            :title="suggestTooltip"
+                            class="px-6 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted/50 text-sakura-muted hover:bg-sakura-mist hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
+                        >
+                            {{ isDrafting ? 'Drafting…' : 'Suggest Format' }}
+                        </button>
+                        <button
+                            @click="submitResponse"
+                            :disabled="editorIsEmpty || !currentCard"
+                            :title="analyzeTooltip"
+                            class="px-10 py-3 text-[13px] tracking-[0.1em] uppercase border border-sakura-muted text-sakura-muted hover:bg-sakura-pink hover:border-sakura-pink hover:text-sakura-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-500 cursor-pointer w-full md:w-auto"
+                        >
+                            Analyze
+                        </button>
                     </div>
                 </div>
             </div>
@@ -538,6 +567,24 @@ async function fetchCards(): Promise<void> {
     }
 
     .v-divider { width: 1px; height: 16px; background: rgba(179, 153, 162, 0.2); margin: 0 6px; }
+
+    .auto-draft-btn {
+        font-size: 14px;
+        padding: 3px 7px;
+        border-radius: 4px;
+        transition: all 0.2s;
+        cursor: pointer;
+        color: @color-text-muted;
+        opacity: 0.5;
+
+        &:hover { opacity: 1; background: rgba(179, 153, 162, 0.1); }
+
+        &.auto-draft-armed {
+            opacity: 1;
+            background: rgba(244, 207, 223, 0.25);
+            box-shadow: 0 0 0 1.5px @color-accent-pink;
+        }
+    }
 }
 
 .tiptap-content {

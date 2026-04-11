@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useCardStore, type ProcessedCard } from '@/stores/cardStore'
-import { useLLMStore, PROMPT_TEMPLATES, type PromptMode } from '@/stores/llm/index'
+import { useLLMStore } from '@/stores/llm/index'
 import CardDetailDialog from './CardDetailDialog.vue'
 import LLMSettings from '@/components/LLMSettings.vue'
 
@@ -55,110 +55,30 @@ function closeCard(): void {
                     </svg>
                 </label>
 
-                <div class="mode-switcher">
-                    <button
-                        @click="llm.setPromptMode('auto')"
-                        class="mode-chip"
-                        :class="{ 'mode-chip--active': llm.promptMode === 'auto' }"
-                    >
-                        Auto
+                <!-- Clear buttons — destructive actions at top, separated from grading -->
+                <template v-if="hasAny">
+                    <button v-if="hasRated" @click="store.removeRatedCards()" class="del-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="w-3 h-3">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        </svg>
+                        Clear graded
                     </button>
-                    <button
-                        v-for="t in PROMPT_TEMPLATES"
-                        :key="t.id"
-                        @click="llm.setPromptMode(t.id as PromptMode)"
-                        class="mode-chip"
-                        :class="[
-                            `mode-chip--${t.id}`,
-                            { 'mode-chip--active': llm.promptMode === t.id },
-                        ]"
-                    >
-                        {{ t.label }}
+                    <button @click="store.clearProcessedCards()" class="del-btn del-btn--all">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="w-3 h-3">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            <path d="M10 11v6M14 11v6" />
+                        </svg>
+                        Clear all
                     </button>
-                </div>
+                </template>
             </div>
             <LLMSettings />
         </div>
 
-        <!-- ── Provider badge ──────────────────────────────────────────── -->
-        <div class="provider-badge">
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                class="w-2.5 h-2.5"
-            >
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 8v4l3 3" />
-            </svg>
-            {{ llm.provider.label }} · {{ llm.modelId }}
-            <span class="mode-hint"
-                >· {{ llm.promptMode === 'auto' ? 'auto' : llm.promptMode }}</span
-            >
-        </div>
-
-        <!-- ── Controls bar ───────────────────────────────────────────── -->
-        <div class="delete-bar">
-            <!-- Autograde (Magic Button) -->
-            <button
-                v-if="hasUngraded"
-                @click="store.autogradeAll()"
-                class="autograde-btn"
-                :title="`Batch-grade ${ungradedCount} cards with AI suggestions`"
-            >
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.75"
-                    class="w-3.5 h-3.5"
-                >
-                    <path
-                        d="M12 3l1.912 5.813L21 9l-5.813 1.912L12 21l-1.912-5.813L3 15l5.813-1.912L12 3z"
-                    />
-                    <path d="M5 3l.7 1.3L7 5l-1.3.7L5 7l-.7-1.3L3 5l1.3-.7L5 3z" />
-                    <path d="M19 19l.7 1.3L21 21l-1.3.7L19 23l-.7-1.3L17 21l1.3-.7L19 19z" />
-                </svg>
-                Autograde ({{ ungradedCount }})
-            </button>
-
-            <!-- Spacer to push clear buttons to the right -->
-            <div class="flex-1"></div>
-
-            <template v-if="hasAny">
-                <button v-if="hasRated" @click="store.removeRatedCards()" class="del-btn">
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.75"
-                        class="w-3 h-3"
-                    >
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    </svg>
-                    Clear graded
-                </button>
-                <button @click="store.clearProcessedCards()" class="del-btn del-btn--all">
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.75"
-                        class="w-3 h-3"
-                    >
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                        <path d="M10 11v6M14 11v6" />
-                    </svg>
-                    Clear all
-                </button>
-            </template>
-        </div>
-
         <!-- ── Card list ───────────────────────────────────────────────── -->
-        <div class="flex-1 overflow-y-auto px-4 py-3">
+        <div class="flex-1 overflow-y-auto px-4 py-3 min-h-0">
             <TransitionGroup name="push" tag="div" class="space-y-2.5">
                 <div
                     v-for="card in processedCards"
@@ -183,15 +103,7 @@ function closeCard(): void {
                                 'status-dot--error': card.status === 'error',
                             }"
                         />
-                        <span class="status-label">
-                            {{
-                                card.status === 'analyzing'
-                                    ? 'Analyzing…'
-                                    : card.rated
-                                      ? 'Graded'
-                                      : 'Awaiting grade'
-                            }}
-                        </span>
+                        <span v-if="card.status === 'analyzing'" class="status-label">Analyzing…</span>
                         <span class="card-type-chip" :class="`ctype--${card.cardType}`">{{
                             card.cardType
                         }}</span>
@@ -235,17 +147,12 @@ function closeCard(): void {
                         ⚠ {{ card.llmAnalysis || 'Analysis failed' }}
                     </p>
 
-                    <!-- AI rating suggestion + tap hint -->
+                    <!-- AI rating suggestion -->
                     <div v-if="card.feedback && !card.rated" class="card-footer">
                         <span class="suggested-chip">
-                            AI:
-                            {{
-                                ['Again', 'Hard', 'Good', 'Easy'][card.feedback.rating - 1]
-                            }}
+                            AI: {{ ['Again', 'Hard', 'Good', 'Easy'][card.feedback.rating - 1] }}
                         </span>
-                        <span class="tap-hint">Tap to review & grade →</span>
                     </div>
-                    <div v-else-if="card.rated" class="rated-tag">✓ Graded</div>
                 </div>
             </TransitionGroup>
 
@@ -253,6 +160,22 @@ function closeCard(): void {
                 <p>No history yet</p>
                 <p class="empty-sub">Answer a card to see AI feedback here</p>
             </div>
+        </div>
+
+        <!-- ── Autograde footer ───────────────────────────────────────── -->
+        <div v-if="hasUngraded" class="autograde-footer">
+            <button
+                @click="store.autogradeAll()"
+                class="autograde-btn"
+                :title="`Batch-grade ${ungradedCount} cards with AI suggestions`"
+            >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="w-3.5 h-3.5">
+                    <path d="M12 3l1.912 5.813L21 9l-5.813 1.912L12 21l-1.912-5.813L3 15l5.813-1.912L12 3z" />
+                    <path d="M5 3l.7 1.3L7 5l-1.3.7L5 7l-.7-1.3L3 5l1.3-.7L5 3z" />
+                    <path d="M19 19l.7 1.3L21 21l-1.3.7L19 23l-.7-1.3L17 21l1.3-.7L19 19z" />
+                </svg>
+                Autograde ({{ ungradedCount }})
+            </button>
         </div>
 
         <!-- ── Detail dialog ───────────────────────────────────────────── -->
@@ -280,73 +203,14 @@ function closeCard(): void {
     border-bottom: 1px solid rgba(244, 207, 223, 0.2);
     flex-shrink: 0;
 }
-.mode-switcher {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
-}
-.mode-chip {
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 11px; // Increased
-    letter-spacing: 0.1em; // Adjusted for readability
-    text-transform: uppercase;
-    border: 1px solid rgba(244, 207, 223, 0.35);
-    background: transparent;
-    color: rgba(179, 153, 162, 0.6);
-    cursor: pointer;
-    transition: all 0.18s;
-    &:hover {
-        border-color: rgba(244, 207, 223, 0.7);
-        color: @muted;
-    }
-    &--active {
-        background: rgba(244, 207, 223, 0.3);
-        border-color: rgba(244, 207, 223, 0.7);
-        color: @text;
-        font-weight: 500;
-    }
-    &--lenient.mode-chip--active {
-        background: rgba(144, 190, 144, 0.2);
-        border-color: rgba(144, 190, 144, 0.4);
-        color: #4a7a4a;
-    }
-    &--balanced.mode-chip--active {
-        background: rgba(179, 153, 162, 0.2);
-        border-color: rgba(179, 153, 162, 0.4);
-        color: #7a5a62;
-    }
-    &--rigorous.mode-chip--active {
-        background: rgba(190, 144, 144, 0.2);
-        border-color: rgba(190, 144, 144, 0.4);
-        color: #7a4a4a;
-    }
-}
 
-// ── Provider badge ────────────────────────────────────────────────────────
-.provider-badge {
+// ── Autograde footer ─────────────────────────────────────────────────────
+.autograde-footer {
     display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 12px 6px;
-    font-size: 11px; // Increased
-    letter-spacing: 0.05em; // Adjusted
-    color: rgba(44, 36, 38, 0.75);
-    // color: #2c2426;
+    justify-content: center;
+    padding: 8px 12px 10px;
+    border-top: 1px solid rgba(244, 207, 223, 0.15);
     flex-shrink: 0;
-}
-.mode-hint {
-    color: rgba(179, 153, 162, 0.35);
-}
-
-// ── Delete bar ────────────────────────────────────────────────────────────
-.delete-bar {
-    display: flex;
-    gap: 6px;
-    padding: 6px 12px 8px;
-    border-bottom: 1px solid rgba(244, 207, 223, 0.15);
-    flex-shrink: 0;
-    flex-wrap: wrap; // Added for narrow screens
 }
 .autograde-btn {
     display: flex;
@@ -610,20 +474,6 @@ function closeCard(): void {
     border-radius: 8px;
     background: rgba(244, 207, 223, 0.3);
     color: @muted;
-}
-
-.tap-hint {
-    font-size: 10px; // Increased
-    color: rgba(179, 153, 162, 0.4);
-    letter-spacing: 0.05em;
-}
-
-.rated-tag {
-    padding-top: 6px;
-    font-size: 10px; // Increased
-    letter-spacing: 0.1em; // Adjusted
-    text-transform: uppercase;
-    color: rgba(80, 160, 100, 0.5);
 }
 
 // ── Empty ─────────────────────────────────────────────────────────────────
