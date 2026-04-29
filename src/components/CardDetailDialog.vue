@@ -16,6 +16,25 @@ const emit = defineEmits<{
 const store = useCardStore()
 const llmStore = useLLMStore()
 
+// Challenge
+const challengeText = ref('')
+const isChallenging = ref(false)
+const challengeError = ref('')
+
+async function submitChallenge(): Promise<void> {
+    const text = challengeText.value.trim()
+    if (!text || isChallenging.value) return
+    isChallenging.value = true
+    challengeError.value = ''
+    challengeText.value = ''
+    const err = await store.submitChallenge(props.card.cardId, text)
+    if (err) {
+        challengeError.value = err
+        challengeText.value = text
+    }
+    isChallenging.value = false
+}
+
 // Retry
 const isRetrying = ref(false)
 async function retryAnalysis(): Promise<void> {
@@ -169,6 +188,41 @@ function keepAndClose(): void {
                                 {{ isRetrying ? 'Retrying…' : 'Retry Analysis' }}
                             </button>
                         </div>
+
+                        <!-- ── Challenge Rating ──────────────────────────────────────── -->
+                        <section v-if="card.status === 'success' && card.feedback" class="section challenge-section">
+                            <p class="section-label">Challenge the Rating</p>
+
+                            <!-- Previous challenges -->
+                            <div v-if="card.challengeThread?.length" class="challenge-thread">
+                                <div v-for="(entry, i) in card.challengeThread" :key="i" class="challenge-entry">
+                                    <p class="challenge-student-text">{{ entry.challenge }}</p>
+                                    <div class="challenge-response">
+                                        <span class="challenge-response-label">Reconsidered</span>
+                                        <span class="challenge-response-verdict">{{ entry.reconsideration.verdict }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <textarea
+                                v-model="challengeText"
+                                class="challenge-input"
+                                placeholder="Argue your case — point to specific parts of your answer the AI may have missed or misread…"
+                                rows="3"
+                                :disabled="isChallenging"
+                            />
+                            <button
+                                @click="submitChallenge"
+                                :disabled="!challengeText.trim() || isChallenging"
+                                class="challenge-btn"
+                            >
+                                <svg v-if="isChallenging" class="w-3 h-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                </svg>
+                                {{ isChallenging ? 'Reconsidering…' : 'Submit Challenge' }}
+                            </button>
+                            <p v-if="challengeError" class="challenge-error">⚠ {{ challengeError }}</p>
+                        </section>
 
                         <!-- ── Second Opinion ────────────────────────────────────────── -->
                         <section v-if="card.status === 'success'" class="section second-opinion-section">
@@ -730,6 +784,124 @@ function keepAndClose(): void {
         color: @muted;
     }
 }
+// ── Challenge Rating ──────────────────────────────────────────────────────
+.challenge-section {
+    gap: 10px;
+}
+
+.challenge-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.challenge-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.challenge-student-text {
+    font-size: 12px;
+    line-height: 1.55;
+    color: rgba(44, 36, 38, 0.65);
+    padding: 6px 10px;
+    background: rgba(252, 240, 242, 0.5);
+    border-radius: 6px;
+    border-left: 2px solid rgba(244, 207, 223, 0.6);
+    font-style: italic;
+}
+
+.challenge-response {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 6px;
+    border-left: 2px solid rgba(80, 160, 100, 0.4);
+}
+
+.challenge-response-label {
+    font-size: 8px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: rgba(80, 160, 100, 0.7);
+}
+
+.challenge-response-verdict {
+    font-size: 12px;
+    line-height: 1.55;
+    color: rgba(44, 36, 38, 0.75);
+}
+
+.challenge-input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.6;
+    font-family: inherit;
+    color: @text;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(244, 207, 223, 0.4);
+    border-radius: 8px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+
+    &::placeholder {
+        color: rgba(179, 153, 162, 0.5);
+    }
+
+    &:focus {
+        border-color: rgba(244, 207, 223, 0.85);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+.challenge-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    padding: 7px 16px;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    border: 1px solid rgba(179, 153, 162, 0.35);
+    background: rgba(252, 240, 242, 0.4);
+    color: @muted;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover:not(:disabled) {
+        background: rgba(244, 207, 223, 0.35);
+        border-color: rgba(244, 207, 223, 0.8);
+        color: @text;
+    }
+
+    &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+}
+
+.challenge-error {
+    font-size: 12px;
+    color: rgba(190, 70, 50, 0.85);
+    background: rgba(190, 70, 50, 0.07);
+    border-left: 2px solid rgba(190, 70, 50, 0.3);
+    border-radius: 4px;
+    padding: 6px 10px;
+}
+
 // ── Second Opinion ────────────────────────────────────────────────────────
 .second-opinion-section {
     gap: 8px;

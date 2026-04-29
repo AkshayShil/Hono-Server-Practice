@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch, shallowReactive } from 'vue';
 import { generateUUID } from '@/utils/uuid';
-import { useLLMStore, type LLMFeedback, type ProviderId } from './llm/index';
+import { useLLMStore, type LLMFeedback, type ProviderId, type ChallengeEntry } from './llm/index';
 import { useErrorLogStore } from './errorLogStore';
 import { useFsrsStore } from './fsrsStore';
 import { State as FSRSState } from 'ts-fsrs';
@@ -58,6 +58,8 @@ export interface ProcessedCard extends Card {
   /** Anki card type inferred from queue position */
   cardType: 'new' | 'learn' | 'review';
   rated: boolean;
+  /** History of student challenges and LLM reconsiderations for this card */
+  challengeThread?: ChallengeEntry[];
 }
 
 export interface DeckStats {
@@ -701,6 +703,41 @@ export const useCardStore = defineStore('cardStore', () => {
   }
 
   /**
+   * Submits a student's challenge against the LLM's rating and replaces
+   * the feedback with the LLM's reconsideration. Preserves full challenge history.
+   */
+  async function submitChallenge(cardId: number, challengeText: string): Promise<string | null> {
+    const entry = processedCards.value.find(c => c.cardId === cardId);
+    if (!entry || entry.status !== 'success' || !entry.feedback) return null;
+
+    const llm = useLLMStore();
+    const originalFeedback = { ...entry.feedback };
+
+    try {
+      const reconsideration = await llm.reconsiderRating({
+        question: stripHtml(entry.question),
+        correctAnswer: stripHtml(entry.answer),
+        userAnswer: entry.userResponse,
+        originalFeedback,
+        challenge: challengeText,
+      });
+
+      const e = processedCards.value.find(c => c.cardId === cardId);
+      if (e) {
+        if (!e.challengeThread) e.challengeThread = [];
+        e.challengeThread.push({ challenge: challengeText, reconsideration });
+        e.feedback = reconsideration;
+        e.llmAnalysis = reconsideration.verdict;
+        playAlert();
+      }
+      return null;
+    } catch (err) {
+      console.error(`submitChallenge (cardId=${cardId}):`, err);
+      return (err instanceof Error ? err.message : 'Challenge failed — please try again.');
+    }
+  }
+
+  /**
    * Batch-processes all cards that have a suggested AI rating but haven't been rated yet.
    */
   async function autogradeAll(): Promise<void> {
@@ -891,6 +928,7 @@ export const useCardStore = defineStore('cardStore', () => {
     init,
     fillDraftBuffer,
     reanalyzeCard,
+    submitChallenge,
     syncDecks,
     syncDeckCards,
     fillQueue,

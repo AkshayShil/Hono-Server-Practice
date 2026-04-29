@@ -7,7 +7,7 @@ import { defineStore } from 'pinia';
 import { ref, computed, onMounted } from 'vue';
 
 import { PROVIDERS }        from './apiConfig';
-import { PROMPT_TEMPLATES, ANTHROPIC_FORMAT_PROMPT } from './promptTemplates';
+import { PROMPT_TEMPLATES, ANTHROPIC_FORMAT_PROMPT, RECONSIDER_PROMPT } from './promptTemplates';
 import { loadConfig, saveConfig } from './persistence';
 import { parseResponse, parseFormatResponse } from './responseParser';
 import { marked } from 'marked';
@@ -197,12 +197,48 @@ export const useLLMStore = defineStore('llm', () => {
     return parseResponse(raw, tmpl);
   }
 
+  async function reconsiderRating(params: {
+    question: string;
+    correctAnswer: string;
+    userAnswer: string;
+    originalFeedback: LLMFeedback;
+    challenge: string;
+  }): Promise<LLMFeedback> {
+    // Preserve the original mode so the reconsidered feedback stays in the same rubric
+    const tmpl: PromptTemplate = {
+      id: params.originalFeedback.mode,
+      systemPrompt: RECONSIDER_PROMPT,
+    };
+
+    const originalFeedbackStr = JSON.stringify({
+      score: params.originalFeedback.score,
+      rating: params.originalFeedback.rating,
+      ratingReason: params.originalFeedback.ratingReason,
+      verdict: params.originalFeedback.verdict,
+      strengths: params.originalFeedback.strengths,
+      gaps: params.originalFeedback.gaps,
+      improvements: params.originalFeedback.improvements,
+    }, null, 2);
+
+    const userMsg = [
+      `QUESTION:\n${params.question}`,
+      `CORRECT ANSWER (from card):\n${params.correctAnswer}`,
+      `STUDENT'S ANSWER:\n${params.userAnswer}`,
+      `YOUR ORIGINAL EVALUATION:\n${originalFeedbackStr}`,
+      `STUDENT'S CHALLENGE:\n${params.challenge}`,
+      'Reconsider your evaluation in light of the challenge. Return JSON.',
+    ].join('\n\n');
+
+    const raw = await callProxy({ template: tmpl, userMessage: userMsg });
+    return parseResponse(raw, tmpl);
+  }
+
   // ── Public API ─────────────────────────────────────────────────────────
   return {
     providerId, modelId, promptMode, submissionFormat, customBaseUrl, autoDraftEnabled,
     provider, models, model, template, availableProviders,
     setProvider, setModel, setPromptMode, setSubmissionFormat, setCustomBaseUrl, setAutoDraftEnabled,
-    resolveTemplate, analyze, cleanText, generateFormat,
+    resolveTemplate, analyze, cleanText, generateFormat, reconsiderRating,
     PROVIDERS, PROMPT_TEMPLATES,
   };
 });

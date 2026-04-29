@@ -13,6 +13,7 @@ export type {
   ModelOption,
   PromptTemplate,
   LLMFeedback,
+  ChallengeEntry,
   Quiz,
   AnalyzeParams,
   PersistedLLMConfig,

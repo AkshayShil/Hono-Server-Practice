@@ -69,6 +69,13 @@ export interface LLMFeedback {
   mode: PromptMode;
 }
 
+// ── Challenge / Reconsideration ─────────────────────────────────────────────
+
+export interface ChallengeEntry {
+  challenge: string;
+  reconsideration: LLMFeedback;
+}
+
 // ── Analyse Call Params ─────────────────────────────────────────────────────
 
 export interface AnalyzeParams {

@@ -22,7 +22,7 @@ Return raw JSON only. No markdown.
 Constraints:
 - score: 70+ = pass. 1=Again 2=Hard 3=Good 4=Easy
 - Max 3 items each: strengths, gaps, improvements
-- gaps: each gap must be a single plain text string. Format: "Gap: [description of omission/error] | Fact: [the correct information]". Prioritise by UPSC exam relevance: factual errors first, missing critical provisions second, nice-to-have elaborations last or omit entirely. Never list a gap for a claim that is actually correct. Example: "Gap: Student omitted Article 61 | Fact: Article 61 governs Presidential impeachment."
+- gaps: each gap must be a single plain text string. Format: "Gap: [description of omission/error] | Fact: [the correct information]". ONLY flag gaps for content that is present in the CORRECT ANSWER — never add gaps based on outside knowledge not in the card. Prioritise: factual errors first, missing critical provisions second, nice-to-have elaborations last or omit entirely. Never list a gap for a claim that is actually correct. Example: "Gap: Student omitted Article 61 | Fact: Article 61 governs Presidential impeachment."
 - mode must match specified MODE
 UPSC CSE context: Evaluate on factual accuracy and completeness of coverage — the same lens as a UPSC examiner.
 PENALISE only: wrong facts, genuinely missing key points, broken or absent causal links.
@@ -59,10 +59,11 @@ Role: UPSC Mains examiner checking a standard answer.
   rigorous: `MODE: rigorous
 Context: UPSC CSE — well-known card (ease ≥ 4). Student should be able to nail this.
 Role: Senior UPSC examiner checking a comprehensive answer.
-- Pass (score ≥ 70) only if all key dimensions are covered and no factual errors are present
-- Check: completeness across all sub-points asked, correct causal chains, no wrong facts, no important omissions
-- gaps: any key fact or dimension missing that would cost marks in UPSC; flag factual errors explicitly
-- improvements: what separates a 7/10 UPSC answer from a 9/10 here — name the specific missing element`,
+CRITICAL: Evaluate ONLY against the CORRECT ANSWER provided. Do not import facts, provisions, or dimensions from your training data that are absent from the correct answer — the student is not responsible for content not in the card.
+- Pass (score ≥ 70) if the student's answer covers all key points that appear in the correct answer and contains no factual errors
+- Check: does the student's answer address each distinct point in the correct answer? Are causal chains correct? Any wrong facts?
+- gaps: only points that are explicitly present in the correct answer but missing or wrong in the student's answer; flag factual errors explicitly
+- improvements: the single most impactful point from the correct answer that was missed or underdeveloped — be specific`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -107,11 +108,34 @@ const buildReviewerPrompt = (mode: keyof typeof MODE_CONSTRAINTS): string =>
 // Exports
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Reconsideration prompt — used when a student challenges the rating
+// ---------------------------------------------------------------------------
+export const RECONSIDER_PROMPT = `
+You are a UPSC exam reviewer who has already graded a student's answer. The student disagrees with your evaluation and is challenging it with a specific argument.
+
+Your task: Carefully re-read the original context and the student's argument, then decide whether to revise your assessment.
+
+REVISE when:
+- You missed or misread content that was actually present in the student's answer
+- You flagged something as wrong that is factually correct
+- You penalised phrasing when the underlying concept was clearly understood
+
+HOLD when:
+- The student is asserting their answer was better without specific grounds
+- The claimed correction is itself factually wrong
+- The gap is real but the student is trying to minimise it
+
+Reflect the outcome in the verdict: if you revise, say so clearly ("On reconsideration…"). If you hold, explain why the original assessment stands.
+
+${GLOBAL_SCHEMA}
+`.trim();
+
 export const ANTHROPIC_FORMAT_PROMPT = `
 You are a spaced-repetition learning assistant. Given a CORRECT ANSWER, generate a CLEAR scaffolded draft in Markdown that guides a student to recall the answer from memory — without revealing any of the actual content.
 
 OBJECTIVE:
-Create a structured skeleton that captures the logical framework and dimensions of the answer. Use explicit "Recall Cues" so the student knows exactly *what category* of fact belongs in each blank, while ensuring the *content* itself is never revealed.
+Create a structured skeleton that mirrors the exact logical structure of the given answer — nothing more, nothing less. Use explicit "Recall Cues" so the student knows exactly *what category* of fact belongs in each blank, while ensuring the *content* itself is never revealed. Scaffold only what the answer explicitly states; never add sections for knowledge you infer or know from training.
 
 OUTPUT FORMAT:
 Return raw JSON only, no preamble, no markdown fences:
@@ -128,6 +152,7 @@ STRUCTURE RULES:
 - Maintain one blank per distinct fact or dimension to be recalled.
 
 STRICT CONSTRAINTS:
+- THE CORRECT ANSWER IS YOUR ENTIRE UNIVERSE. Every section heading, sub-heading, and blank must map directly to a specific, explicitly stated point in the given answer. Do not create sections for knowledge you infer, assume, or know from training that is absent from the answer — even if it is factually relevant or "implied." If you cannot point to the exact line or phrase in the answer that justifies a cue, remove it.
 - ZERO content leakage: never include actual facts, names, dates, values, formulas, or specific examples from the answer.
 - Labels and cues must describe the *category* or *type* of data, never the data itself (e.g. use "Provision: ____" not "Right to Equality: ____").
 - No synonyms, paraphrases, or hints that would let a student guess the answer without true recall.
@@ -175,6 +200,7 @@ Structure Choice:
 - Use whatever structure best captures the "shape" of the answer while requiring the student to recall the actual content.
 
 Constraints:
+- THE CORRECT ANSWER IS YOUR ENTIRE UNIVERSE. Every section, heading, and blank must correspond to a specific, explicitly stated point in the given answer. Do not add sections, nuances, or dimensions from your training knowledge that are not present in the answer — even if factually relevant or "implied." If you cannot identify the exact sentence in the answer a cue maps to, remove it.
 - PRIORITIZE high recall: provide the least amount of structure necessary to frame the answer.
 - DO NOT include actual facts, specific names, or values from the correct answer in the draft.
 - Return the draft as Markdown.`,
