@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useCardStore } from '@/stores/cardStore'
+import { appMode } from '@/stores/appMode'
 
 const store = useCardStore()
 
@@ -82,6 +83,19 @@ const handleReset = async () => {
                 </svg>
                 Reset
             </button>
+
+            <div class="hidden md:flex items-center border border-white/20 overflow-hidden rounded-md h-7">
+                <button @click="appMode = 'study'"
+                    class="px-3 h-full text-[9px] tracking-[0.3em] uppercase transition-colors cursor-pointer"
+                    :class="appMode === 'study' ? 'bg-white/20 text-sakura-white' : 'text-sakura-white/40 hover:text-sakura-white/70'">
+                    Study
+                </button>
+                <button @click="appMode = 'gurukul'"
+                    class="px-2 h-full text-[9px] tracking-[0.3em] uppercase transition-colors border-l border-white/20 cursor-pointer"
+                    :class="appMode === 'gurukul' ? 'bg-white/20 text-sakura-white' : 'text-sakura-white/40 hover:text-sakura-white/70'">
+                    Gurukul
+                </button>
+            </div>
 
             <select
                 v-model="selectedDeck"

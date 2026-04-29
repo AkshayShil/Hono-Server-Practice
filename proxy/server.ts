@@ -10,7 +10,9 @@ import { ankiProxy } from './routes/ankiProxy';
 import { llmProxy } from './routes/llm';
 import { fsrsRouter } from './routes/fsrs';
 import { syncRouter } from './routes/sync';
+import { gurukulRouter } from './routes/gurukul';
 import { initSchema } from './utils/db';
+import { initSchema as initGurukulSchema } from './utils/gurukulDb';
 import { migrate } from './utils/migrate';
 import { logger } from './utils/logger';
 
@@ -32,9 +34,10 @@ export async function initLogs() {
     await mkdir(dataDir, { recursive: true });
     logger.info(`[Server] FSRS data directory: ${dataDir}`);
     
-    // Initialize SQLite database
+    // Initialize SQLite databases
     initSchema();
-    logger.info('[Server] SQLite database initialized');
+    initGurukulSchema();
+    logger.info('[Server] SQLite databases initialized');
     
     // Migrate legacy data
     migrate();
@@ -63,7 +66,10 @@ app.route('/fsrs', fsrsRouter);
 // 4. Syncing (Anki to SQLite)
 app.route('/sync', syncRouter);
 
-// 5. LLM Analysis Logging
+// 5. Gurukul Persistence
+app.route('/api/gurukul', gurukulRouter);
+
+// 6. LLM Analysis Logging
 app.post('/log-analysis', async (c) => {
   try {
     const data = await c.req.json();

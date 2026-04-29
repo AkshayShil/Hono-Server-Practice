@@ -5,7 +5,11 @@ import AppHeader from '@/components/AppHeader.vue'
 import QueuePane from '@/components/QueuePane.vue'
 import SessionHistory from '@/components/SessionHistory.vue'
 import StudyPane from '@/components/StudyPane.vue'
+import GurukulChat from '@/components/GurukulChat.vue'
+import GurukulFileBrowser from '@/components/GurukulFileBrowser.vue'
+import GurukulReader from '@/components/GurukulReader.vue'
 import { useCardStore } from '@/stores/cardStore'
+import { appMode } from '@/stores/appMode'
 
 const store = useCardStore()
 
@@ -67,6 +71,7 @@ onMounted(async () => {
 
             <!-- Mobile Drawer Toggle: Visible only on small screens -->
             <label
+                v-if="appMode === 'study'"
                 for="history-drawer"
                 class="md:hidden fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-sakura-pink/80 text-sakura-text p-2 rounded-l-xl shadow-lg border border-r-0 border-sakura-pink/30 backdrop-blur-sm cursor-pointer transition-all hover:bg-sakura-pink"
             >
@@ -82,29 +87,38 @@ onMounted(async () => {
             </label>
 
             <!-- 25 / 50 / 25 — grid-cols-12: 3 + 6 + 3 (approx) -->
-            <main class="flex-1 grid grid-cols-12 w-full overflow-hidden min-h-0">
-                <!-- Left: Queue (Hidden on mobile) -->
-                <QueuePane class="hidden md:flex md:col-span-2" />
+            <template v-if="appMode === 'study'">
+                <main class="flex-1 grid grid-cols-12 w-full overflow-hidden min-h-0">
+                    <!-- Left: Queue (Hidden on mobile) -->
+                    <QueuePane class="hidden md:flex md:col-span-2" />
 
-                <!-- Centre: Study editor (Full width on mobile) -->
-                <StudyPane class="col-span-12 md:col-span-8" />
+                    <!-- Centre: Study editor (Full width on mobile) -->
+                    <StudyPane class="col-span-12 md:col-span-8" />
 
-                <!-- Right: Session history (Desktop only) -->
-                <aside
-                    class="hidden md:flex md:col-span-2 bg-sakura-mist flex flex-col overflow-hidden min-h-0 border-l border-sakura-pink/15"
-                >
-                    <!-- Panel header -->
-                    <div
-                        class="px-6 py-5 border-b border-sakura-pink/15 flex items-center justify-between shrink-0"
+                    <!-- Right: Session history (Desktop only) -->
+                    <aside
+                        class="hidden md:flex md:col-span-2 bg-sakura-mist flex flex-col overflow-hidden min-h-0 border-l border-sakura-pink/15"
                     >
-                        <p class="text-[9px] tracking-[0.5em] uppercase text-sakura-muted/70">
-                            History
-                        </p>
-                    </div>
+                        <!-- Panel header -->
+                        <div
+                            class="px-6 py-5 border-b border-sakura-pink/15 flex items-center justify-between shrink-0"
+                        >
+                            <p class="text-[9px] tracking-[0.5em] uppercase text-sakura-muted/70">
+                                History
+                            </p>
+                        </div>
 
-                    <SessionHistory />
-                </aside>
-            </main>
+                        <SessionHistory />
+                    </aside>
+                </main>
+            </template>
+            <template v-else>
+                <main class="flex-1 grid grid-cols-12 w-full overflow-hidden min-h-0">
+                    <GurukulFileBrowser class="hidden md:flex md:col-span-2" />
+                    <GurukulChat class="col-span-12 md:col-span-6" />
+                    <GurukulReader class="hidden md:flex md:col-span-4" />
+                </main>
+            </template>
 
             <AppFooter />
         </div>

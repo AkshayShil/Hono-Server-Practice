@@ -6,6 +6,8 @@ const INFERENCE_DEFAULTS = {
   topP: 1,
 } as const;
 
+const GURU_MAX_TOKENS = 350;
+
 export const llmProxy = new Hono();
 
 // ── Interfaces ──────────────────────────────────────────────────────────────
@@ -28,6 +30,11 @@ interface LLMCallParams {
   userMessage: string;
   providerId?: string;
   requiresKey?: boolean;
+}
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 // ── Shared Helpers ──────────────────────────────────────────────────────────
@@ -191,6 +198,76 @@ async function callOpenAICompat(params: LLMCallParams) {
   return typeof text === 'string' ? text : '';
 }
 
+// ── Multi-turn Helpers ──────────────────────────────────────────────────────
+
+async function callAnthropicChat(params: { baseUrl: string, apiKey: string, model: string, system: string, messages: ChatMessage[] }) {
+  const { baseUrl, apiKey, model, system, messages } = params;
+  const res = await fetch(`${baseUrl}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: GURU_MAX_TOKENS,
+      temperature: 0.7,
+      system,
+      messages,
+    }),
+  });
+  if (!res.ok) throw new Error(`Anthropic error ${res.status}: ${await res.text()}`);
+  const data = await res.json() as any;
+  return data.content?.find((b: any) => b.type === 'text')?.text || '';
+}
+
+async function callGoogleChat(params: { baseUrl: string, apiKey: string, model: string, system: string, messages: ChatMessage[] }) {
+  const { baseUrl, apiKey, model, system, messages } = params;
+  const url = `${baseUrl}/models/${model}:generateContent?key=${apiKey}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: messages.map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      })),
+      generationConfig: {
+        maxOutputTokens: GURU_MAX_TOKENS,
+        temperature: 0.7,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`Google error ${res.status}: ${await res.text()}`);
+  const data = await res.json() as any;
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+async function callOpenAIChat(params: { baseUrl: string, apiKey: string, model: string, system: string, messages: ChatMessage[] }) {
+  const { baseUrl, apiKey, model, system, messages } = params;
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: GURU_MAX_TOKENS,
+      temperature: 0.7,
+      messages: [
+        { role: 'system', content: system },
+        ...messages,
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${await res.text()}`);
+  const data = await res.json() as any;
+  return data.choices?.[0]?.message?.content || '';
+}
+
 // ── Main Route ──────────────────────────────────────────────────────────────
 
 llmProxy.post('/call', async (c) => {
@@ -230,6 +307,47 @@ llmProxy.post('/call', async (c) => {
   } catch (err: unknown) {
     const error = err as Error;
     console.error('[LLM Proxy] Call failed:', error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Gurukul Multi-turn Endpoint
+llmProxy.post('/gurukul', async (c) => {
+  try {
+    const { provider, model, systemPrompt, messages, customBaseUrl } = await c.req.json();
+    
+    const ENV_KEYS: Record<string, string | undefined> = {
+      openai:     process.env.OPENAI_API_KEY,
+      anthropic:  process.env.ANTHROPIC_API_KEY,
+      google:     process.env.GOOGLE_API_KEY,
+      openrouter: process.env.OPENROUTER_API_KEY,
+      deepseek:   process.env.DEEPSEEK_API_KEY,
+      ollama:     process.env.OLLAMA_API_KEY,
+    };
+
+    const apiKey = ENV_KEYS[provider.id] || '';
+    const baseUrl = customBaseUrl?.trim() || provider.baseUrl;
+
+    if (provider.requiresKey && !apiKey) {
+      return c.json({ error: `No API key found on server for ${provider.label}` }, 400);
+    }
+
+    let result: string;
+    const params = { baseUrl, apiKey, model: model.id, system: systemPrompt, messages };
+
+    if (provider.id === 'anthropic') {
+      result = await callAnthropicChat(params);
+    } else if (provider.id === 'google') {
+      result = await callGoogleChat(params);
+    } else {
+      // OpenAI and compat (openrouter, deepseek, ollama)
+      result = await callOpenAIChat(params);
+    }
+
+    return c.json({ content: result });
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('[LLM Proxy] Gurukul call failed:', error);
     return c.json({ error: error.message }, 500);
   }
 });
