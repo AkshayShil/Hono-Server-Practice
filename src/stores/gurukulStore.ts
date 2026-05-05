@@ -185,10 +185,16 @@ export const useGurukulStore = defineStore('gurukulStore', () => {
     if (!savedPath) return
     const file = files.value.find(f => f.path === savedPath)
     if (!file) return
-    await selectFile(file)
-    if (savedSection) {
-      const sec = sections.value.find(s => s.title === savedSection)
-      if (sec) activeSection.value = sec
+    try {
+      await selectFile(file)
+      if (savedSection) {
+        const sec = sections.value.find(s => s.title === savedSection)
+        if (sec) activeSection.value = sec
+      }
+    } catch (err) {
+      console.warn('[Gurukul Store] Failed to restore selection:', err)
+      selectedFile.value = null
+      activeSection.value = null
     }
   }
 
@@ -347,11 +353,15 @@ export const useGurukulStore = defineStore('gurukulStore', () => {
     activeSection.value = null
     resetSession()
     if (!file.content) {
-      if (file.handle) {
-        const f = await file.handle.getFile()
-        file.content = await f.text()
-      } else if (file.fileRef) {
-        file.content = await file.fileRef.text()
+      try {
+        if (file.handle) {
+          const f = await file.handle.getFile()
+          file.content = await f.text()
+        } else if (file.fileRef) {
+          file.content = await file.fileRef.text()
+        }
+      } catch (err) {
+        error.value = 'Could not read file: ' + (err as Error).message
       }
     }
   }

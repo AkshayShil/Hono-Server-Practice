@@ -73,8 +73,14 @@ watch(() => store.selectedFile, () => {
     <!-- Content Area -->
     <div ref="readerContent" class="flex-1 overflow-y-auto custom-scrollbar">
       <div v-if="store.selectedFile" class="max-w-3xl mx-auto px-8 py-10 space-y-12 pb-32">
-        <div 
-          v-for="section in store.sections" 
+        <!-- No sections: file selected but content is empty or parsing yielded nothing -->
+        <div v-if="store.sections.length === 0" class="flex flex-col items-center justify-center py-20 gap-3 text-sakura-muted/40">
+          <div class="text-3xl">∅</div>
+          <p class="text-[11px] uppercase tracking-widest">No sections found</p>
+          <p class="text-[10px] text-sakura-muted/30">File may be empty or unreadable</p>
+        </div>
+        <div
+          v-for="section in store.sections"
           :key="section.title"
           :id="`section-${section.title.replace(/\s+/g, '-').toLowerCase()}`"
           class="section-container relative transition-all duration-300"
