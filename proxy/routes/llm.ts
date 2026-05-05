@@ -7,6 +7,7 @@ const INFERENCE_DEFAULTS = {
 } as const;
 
 const GURU_MAX_TOKENS = 350;
+const GURU_TEMPERATURE = 0.4;
 
 export const llmProxy = new Hono();
 
@@ -212,7 +213,7 @@ async function callAnthropicChat(params: { baseUrl: string, apiKey: string, mode
     body: JSON.stringify({
       model,
       max_tokens: GURU_MAX_TOKENS,
-      temperature: 0.7,
+      temperature: GURU_TEMPERATURE,
       system,
       messages,
     }),
@@ -236,7 +237,7 @@ async function callGoogleChat(params: { baseUrl: string, apiKey: string, model: 
       })),
       generationConfig: {
         maxOutputTokens: GURU_MAX_TOKENS,
-        temperature: 0.7,
+        temperature: GURU_TEMPERATURE,
       },
     }),
   });
@@ -256,7 +257,7 @@ async function callOpenAIChat(params: { baseUrl: string, apiKey: string, model: 
     body: JSON.stringify({
       model,
       max_tokens: GURU_MAX_TOKENS,
-      temperature: 0.7,
+      temperature: GURU_TEMPERATURE,
       messages: [
         { role: 'system', content: system },
         ...messages,
@@ -315,7 +316,7 @@ llmProxy.post('/call', async (c) => {
 llmProxy.post('/gurukul', async (c) => {
   try {
     const { provider, model, systemPrompt, messages, customBaseUrl } = await c.req.json();
-    
+
     const ENV_KEYS: Record<string, string | undefined> = {
       openai:     process.env.OPENAI_API_KEY,
       anthropic:  process.env.ANTHROPIC_API_KEY,
@@ -340,7 +341,6 @@ llmProxy.post('/gurukul', async (c) => {
     } else if (provider.id === 'google') {
       result = await callGoogleChat(params);
     } else {
-      // OpenAI and compat (openrouter, deepseek, ollama)
       result = await callOpenAIChat(params);
     }
 

@@ -127,6 +127,79 @@ gurukulRouter.put('/sessions/:id/end', async (c) => {
   }
 });
 
+// ── Macro Sessions ──────────────────────────────────────────────────────────
+
+// Create a named macro session
+gurukulRouter.post('/macro-sessions', async (c) => {
+  try {
+    const { id, name } = await c.req.json();
+    db.prepare('INSERT INTO gurukul_macro_sessions (id, name) VALUES (?, ?)').run(id, name);
+    return c.json({ status: 'ok', id });
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 500);
+  }
+});
+
+// Get currently active macro session (latest not yet ended)
+gurukulRouter.get('/macro-sessions/active', (c) => {
+  const session = db.prepare(
+    'SELECT * FROM gurukul_macro_sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1'
+  ).get() as { id: string } | undefined;
+  if (!session) return c.json({ session: null, notes: [] });
+  const notes = db.prepare(
+    'SELECT file_path, studied_at FROM gurukul_macro_session_notes WHERE macro_session_id = ? ORDER BY studied_at ASC'
+  ).all(session.id);
+  return c.json({ session, notes });
+});
+
+// List all past macro sessions
+gurukulRouter.get('/macro-sessions', (c) => {
+  const sessions = db.prepare(
+    'SELECT ms.*, COUNT(msn.id) as notes_count FROM gurukul_macro_sessions ms LEFT JOIN gurukul_macro_session_notes msn ON ms.id = msn.macro_session_id GROUP BY ms.id ORDER BY ms.started_at DESC LIMIT 30'
+  ).all();
+  return c.json({ sessions });
+});
+
+// End a macro session
+gurukulRouter.put('/macro-sessions/:id/end', (c) => {
+  const id = c.req.param('id');
+  db.prepare('UPDATE gurukul_macro_sessions SET ended_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  return c.json({ status: 'ok' });
+});
+
+// Mark a file as studied within a macro session (idempotent)
+gurukulRouter.post('/macro-sessions/:id/notes', async (c) => {
+  const macroSessionId = c.req.param('id');
+  try {
+    const { filePath } = await c.req.json();
+    const existing = db.prepare(
+      'SELECT id FROM gurukul_macro_session_notes WHERE macro_session_id = ? AND file_path = ?'
+    ).get(macroSessionId, filePath);
+    if (!existing) {
+      db.prepare(
+        'INSERT INTO gurukul_macro_session_notes (macro_session_id, file_path) VALUES (?, ?)'
+      ).run(macroSessionId, filePath);
+    }
+    return c.json({ status: 'ok' });
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 500);
+  }
+});
+
+// Remove a file from a macro session (unmark done)
+gurukulRouter.delete('/macro-sessions/:id/notes', async (c) => {
+  const macroSessionId = c.req.param('id');
+  try {
+    const { filePath } = await c.req.json();
+    db.prepare(
+      'DELETE FROM gurukul_macro_session_notes WHERE macro_session_id = ? AND file_path = ?'
+    ).run(macroSessionId, filePath);
+    return c.json({ status: 'ok' });
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 500);
+  }
+});
+
 // ── Assessment ──────────────────────────────────────────────────────────────
 
 // Run cross-session LLM assessment

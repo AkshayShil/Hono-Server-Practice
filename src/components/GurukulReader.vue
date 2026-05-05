@@ -36,11 +36,6 @@ function handleSectionClick(section: NoteSection) {
   scrollToSection(section.title)
 }
 
-function startQuiz(section: NoteSection) {
-  store.selectSection(section)
-  store.startSession()
-}
-
 // Watch for file selection to reset scroll
 watch(() => store.selectedFile, () => {
   if (readerContent.value) {
@@ -52,27 +47,27 @@ watch(() => store.selectedFile, () => {
 <template>
   <main class="gurukul-reader flex flex-col h-full overflow-hidden bg-white/50 backdrop-blur-sm">
     <!-- Section Navigation -->
-    <nav v-if="store.sections.length > 0" class="section-nav shrink-0 border-b border-sakura-pink/20 px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar">
-      <div 
-        v-for="section in store.sections" 
+    <nav v-if="store.sections.length > 0" class="section-nav shrink-0 border-b border-sakura-pink/20 px-4 py-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
+      <button
+        v-for="section in store.sections"
         :key="section.title"
-        class="group relative"
+        @click="handleSectionClick(section)"
+        class="pill-btn whitespace-nowrap shrink-0"
+        :class="{ 'pill-btn--active': store.activeSection?.title === section.title }"
       >
-        <button 
-          @click="handleSectionClick(section)"
-          class="pill-btn whitespace-nowrap"
-          :class="{ 'pill-btn--active': store.activeSection?.title === section.title }"
-        >
-          {{ section.title || 'Introduction' }}
-        </button>
-        <button 
-          @click.stop="startQuiz(section)"
-          class="quiz-trigger-small"
-          title="Start Quiz"
-        >
-          ▶
-        </button>
-      </div>
+        {{ section.title || 'Introduction' }}
+      </button>
+      <!-- Collapse reader button — flush right so student can hide notes when answering -->
+      <button
+        @click="store.readerCollapsed = true"
+        class="ml-auto shrink-0 flex items-center gap-1 text-[10px] uppercase tracking-wider text-sakura-muted/50 hover:text-sakura-dark/70 hover:bg-sakura-pink/10 px-2 py-1 rounded-lg transition-all"
+        title="Hide notes panel"
+      >
+        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+        Hide
+      </button>
     </nav>
 
     <!-- Content Area -->
@@ -134,7 +129,7 @@ watch(() => store.selectedFile, () => {
 .pill-btn {
   padding: 5px 14px;
   border-radius: 20px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   background: rgba(244, 207, 223, 0.15);
   color: #9e8289;
@@ -154,36 +149,6 @@ watch(() => store.selectedFile, () => {
   }
 }
 
-.quiz-trigger-small {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 16px;
-  height: 16px;
-  background: #f4cfdf;
-  border-radius: 50%;
-  font-size: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transform: scale(0.8);
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  cursor: pointer;
-  color: #2c2426;
-  z-index: 5;
-
-  .group:hover & {
-    opacity: 1;
-    transform: scale(1);
-  }
-
-  &:hover {
-    background: #eeb9d1;
-    transform: scale(1.1);
-  }
-}
 
 .section-container {
   padding: 24px;
@@ -208,7 +173,7 @@ watch(() => store.selectedFile, () => {
   float: right;
   background: #f4cfdf;
   color: #2c2426;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;

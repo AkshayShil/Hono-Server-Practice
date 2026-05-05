@@ -41,6 +41,7 @@ export const PROVIDERS: ProviderConfig[] = [
     apiKeyLabel: 'Anthropic API Key',
     requiresKey: true,
     models: [
+      { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6', contextK: 200 },
       { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  contextK: 200 },
     ],
   },
@@ -51,7 +52,8 @@ export const PROVIDERS: ProviderConfig[] = [
     apiKeyLabel: 'Google AI API Key',
     requiresKey: true,
     models: [
-      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash-Lite',  contextK: 1000 }
+      { id: 'gemini-3-flash-preview',        label: 'Gemini 3 Flash',          contextK: 1000 },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash-Lite',   contextK: 1000 },
     ],
   },
   {

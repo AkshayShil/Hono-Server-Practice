@@ -41,7 +41,7 @@ const editor = useEditor({
     content: '',
     editorProps: {
         attributes: {
-            class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none min-h-[160px] lg:min-h-[400px] max-h-[60vh] overflow-y-auto p-4 lg:p-10 font-sans text-sakura-text',
+            class: 'focus:outline-none min-h-[160px] lg:min-h-[400px] max-h-[60vh] overflow-y-auto p-4 lg:p-10 font-sans text-sakura-text',
         },
         handleKeyDown: (view, event) => {
             if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
@@ -407,7 +407,7 @@ async function fetchCards(): Promise<void> {
                                 :class="{ 'auto-draft-armed': llmStore.autoDraftEnabled }"
                                 :title="llmStore.autoDraftEnabled ? 'Auto-Draft: Armed — click to disarm' : 'Auto-Draft: Off — click to arm'"
                                 class="auto-draft-btn"
-                            >✨</button>
+                            >✨ Auto</button>
                             <template v-if="editor.isActive('table')">
                                 <button @click="editor.chain().focus().addColumnBefore().run()" title="Add Column Before">C←</button>
                                 <button @click="editor.chain().focus().addColumnAfter().run()" title="Add Column After">C→</button>
@@ -569,13 +569,14 @@ async function fetchCards(): Promise<void> {
     .v-divider { width: 1px; height: 16px; background: rgba(179, 153, 162, 0.2); margin: 0 6px; }
 
     .auto-draft-btn {
-        font-size: 14px;
-        padding: 3px 7px;
+        font-size: 12px;
+        padding: 3px 8px;
         border-radius: 4px;
         transition: all 0.2s;
         cursor: pointer;
         color: @color-text-muted;
-        opacity: 0.5;
+        opacity: 0.85;
+        letter-spacing: 0.03em;
 
         &:hover { opacity: 1; background: rgba(179, 153, 162, 0.1); }
 
@@ -583,6 +584,7 @@ async function fetchCards(): Promise<void> {
             opacity: 1;
             background: rgba(244, 207, 223, 0.25);
             box-shadow: 0 0 0 1.5px @color-accent-pink;
+            color: @color-text-dark;
         }
     }
 }

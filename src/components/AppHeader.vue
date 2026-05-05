@@ -98,6 +98,7 @@ const handleReset = async () => {
             </div>
 
             <select
+                v-if="appMode === 'study'"
                 v-model="selectedDeck"
                 class="hidden md:inline-block bg-white/10 text-[10px] border border-white/20 px-3 py-1 text-sakura-white/80 rounded-none focus:outline-none cursor-pointer uppercase tracking-widest hover:bg-white/20 transition-colors"
             >
@@ -112,6 +113,7 @@ const handleReset = async () => {
             </select>
 
             <button
+                v-if="appMode === 'study'"
                 class="md:hidden bg-white/10 text-[10px] border border-white/20 px-3 py-1 text-sakura-white/80 rounded-none focus:outline-none cursor-pointer uppercase tracking-widest hover:bg-white/20 transition-colors"
                 @click="openDeckModal"
             >

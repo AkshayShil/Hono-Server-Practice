@@ -39,7 +39,23 @@ export function initSchema() {
       FOREIGN KEY (session_id) REFERENCES gurukul_sessions(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS gurukul_macro_sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      ended_at DATETIME
+    );
+
+    CREATE TABLE IF NOT EXISTS gurukul_macro_session_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      macro_session_id TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      studied_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (macro_session_id) REFERENCES gurukul_macro_sessions(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_gurukul_sessions_file ON gurukul_sessions(file_path);
     CREATE INDEX IF NOT EXISTS idx_gurukul_messages_session ON gurukul_messages(session_id);
+    CREATE INDEX IF NOT EXISTS idx_macro_session_notes ON gurukul_macro_session_notes(macro_session_id);
   `);
 }

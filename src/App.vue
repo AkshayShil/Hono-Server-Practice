@@ -9,9 +9,11 @@ import GurukulChat from '@/components/GurukulChat.vue'
 import GurukulFileBrowser from '@/components/GurukulFileBrowser.vue'
 import GurukulReader from '@/components/GurukulReader.vue'
 import { useCardStore } from '@/stores/cardStore'
+import { useGurukulStore } from '@/stores/gurukulStore'
 import { appMode } from '@/stores/appMode'
 
 const store = useCardStore()
+const gurukulStore = useGurukulStore()
 
 const touchStartX = ref(0)
 const touchStartY = ref(0)
@@ -113,10 +115,30 @@ onMounted(async () => {
                 </main>
             </template>
             <template v-else>
-                <main class="flex-1 grid grid-cols-12 w-full overflow-hidden min-h-0">
-                    <GurukulFileBrowser class="hidden md:flex md:col-span-2" />
-                    <GurukulChat class="col-span-12 md:col-span-6" />
-                    <GurukulReader class="hidden md:flex md:col-span-4" />
+                <main class="flex-1 flex w-full overflow-hidden min-h-0">
+                    <GurukulFileBrowser class="hidden md:flex shrink-0 w-48" />
+                    <GurukulChat class="flex-1 min-w-0" />
+                    <!-- Collapse handle -->
+                    <button
+                        @click="gurukulStore.readerCollapsed = !gurukulStore.readerCollapsed"
+                        class="hidden md:flex shrink-0 items-center justify-center w-4 bg-sakura-mist/20 hover:bg-sakura-pink/20 border-x border-sakura-pink/15 transition-colors cursor-pointer"
+                        :title="gurukulStore.readerCollapsed ? 'Expand reader' : 'Collapse reader'"
+                    >
+                        <svg
+                            class="w-3 h-3 text-sakura-muted/50 transition-transform duration-300"
+                            :class="{ 'rotate-180': gurukulStore.readerCollapsed }"
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        >
+                            <path d="M15 18l-6-6 6-6" />
+                        </svg>
+                    </button>
+                    <!-- Reader panel — width transitions to 0 when collapsed -->
+                    <div
+                        class="hidden md:block overflow-hidden shrink-0 transition-[width] duration-300"
+                        :style="{ width: gurukulStore.readerCollapsed ? '0' : '33.33%' }"
+                    >
+                        <GurukulReader class="h-full" />
+                    </div>
                 </main>
             </template>
 
