@@ -198,6 +198,18 @@ export const useGurukulStore = defineStore('gurukulStore', () => {
     }
   }
 
+  // ── Blind Mode (active recall) ───────────────────────────────────────────
+  const blindMode = ref(false)
+  const peekCount = ref(0)
+
+  function peek() { peekCount.value++ }
+
+  // Reset per file selection
+  watch(selectedFile, () => {
+    blindMode.value = false
+    peekCount.value = 0
+  })
+
   // ── Reader collapse (purely manual — student controls this) ──────────────
   const readerCollapsed = ref(false)
 
@@ -520,7 +532,10 @@ Begin by asking your first question.`.trim()
         const llm = useLLMStore()
         const history = messages.value.slice(-10)
           .map(m => `${m.role === 'user' ? 'Student' : 'Guru'}: ${m.content}`).join('\n')
-        const summaryPrompt = `Summarize this teaching session in under 80 words. Focus on: topics covered, where the student showed confusion or errors, what they understood well. Plain text only, no headers or bullets.\n\nSession:\n${history}`
+        const peekNote = peekCount.value > 0
+          ? ` The student peeked at the source notes ${peekCount.value} time${peekCount.value > 1 ? 's' : ''} during this session; factor this reliance into your assessment.`
+          : ''
+        const summaryPrompt = `Summarize this teaching session in under 80 words. Focus on: topics covered, where the student showed confusion or errors, what they understood well. Plain text only, no headers or bullets.${peekNote}\n\nSession:\n${history}`
         const res = await fetch('/api/llm/call', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -695,6 +710,10 @@ Begin by asking your first question.`.trim()
     initMacroSessionRestore,
     markFileStudied,
     unmarkFileStudied,
+    // Blind mode
+    blindMode,
+    peekCount,
+    peek,
     // Reader collapse (manual only)
     readerCollapsed,
     // Actions

@@ -1,10 +1,28 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import { useGurukulStore, type NoteSection } from '@/stores/gurukulStore'
 
 const store = useGurukulStore()
 const readerContent = ref<HTMLElement | null>(null)
+const isPeeking = ref(false)
+
+function startPeek() {
+  isPeeking.value = true
+  store.peek()
+}
+function endPeek() {
+  isPeeking.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('mouseup', endPeek)
+  window.addEventListener('touchend', endPeek)
+})
+onUnmounted(() => {
+  window.removeEventListener('mouseup', endPeek)
+  window.removeEventListener('touchend', endPeek)
+})
 
 marked.setOptions({ gfm: true, breaks: true })
 
@@ -57,6 +75,19 @@ watch(() => store.selectedFile, () => {
       >
         {{ section.title || 'Introduction' }}
       </button>
+      <!-- Blind mode toggle -->
+      <button
+        @click="store.blindMode = !store.blindMode"
+        class="shrink-0 flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-1 rounded-lg transition-all"
+        :class="store.blindMode
+          ? 'bg-sakura-dark/10 text-sakura-dark font-semibold'
+          : 'text-sakura-muted/50 hover:text-sakura-dark/70 hover:bg-sakura-pink/10'"
+        :title="store.blindMode ? 'Blind mode on — click to disable' : 'Enable blind mode for active recall'"
+      >
+        {{ store.blindMode ? '🙈' : '👁️' }}
+        <span>Blind</span>
+        <span v-if="store.blindMode && store.peekCount > 0" class="ml-0.5 text-[9px] font-bold text-sakura-muted/60">({{ store.peekCount }})</span>
+      </button>
       <!-- Collapse reader button — flush right so student can hide notes when answering -->
       <button
         @click="store.readerCollapsed = true"
@@ -84,14 +115,14 @@ watch(() => store.selectedFile, () => {
           :key="section.title"
           :id="`section-${section.title.replace(/\s+/g, '-').toLowerCase()}`"
           class="section-container relative transition-all duration-300"
-          :class="{ 
+          :class="{
             'section--active': store.activeSection?.title === section.title,
             'section--dimmed': store.activeSection && store.activeSection.title !== section.title
           }"
         >
           <!-- Active Section Indicator -->
-          <div 
-            v-if="store.activeSection?.title === section.title" 
+          <div
+            v-if="store.activeSection?.title === section.title"
             class="sticky-label"
           >
             Now studying
@@ -102,11 +133,23 @@ watch(() => store.selectedFile, () => {
             {{ section.title }}
           </h2>
 
-          <!-- Section Content -->
-          <div
-            class="markdown-body max-w-none"
-            v-html="renderedHtml.get(section.title) || ''"
-          ></div>
+          <!-- Section Content (blurred in blind mode) -->
+          <div class="relative">
+            <div
+              class="markdown-body max-w-none transition-all duration-300"
+              :class="{ 'blind-blur': store.blindMode && !isPeeking }"
+              v-html="renderedHtml.get(section.title) || ''"
+            ></div>
+            <!-- Peek overlay — hold to temporarily reveal -->
+            <div
+              v-if="store.blindMode && !isPeeking"
+              class="peek-overlay"
+              @mousedown="startPeek"
+              @touchstart.prevent="startPeek"
+            >
+              <span class="peek-btn">Hold to Peek</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -239,4 +282,45 @@ watch(() => store.selectedFile, () => {
   background: rgba(244, 207, 223, 0.4);
   border-radius: 4px;
 }
+
+// ── Blind Mode ───────────────────────────────────────────────────────────────
+.blind-blur {
+  filter: blur(6px);
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+}
+
+.peek-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.peek-btn {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #2c2426;
+  background: rgba(244, 207, 223, 0.85);
+  border: 1px solid rgba(244, 207, 223, 0.7);
+  backdrop-filter: blur(8px);
+  padding: 8px 18px;
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(94, 82, 86, 0.12);
+  transition: all 0.15s ease;
+  pointer-events: none;
+}
+
+.peek-overlay:active .peek-btn,
+.peek-overlay:hover .peek-btn {
+  background: rgba(244, 207, 223, 1);
+  box-shadow: 0 4px 16px rgba(94, 82, 86, 0.18);
+}
+
 </style>
